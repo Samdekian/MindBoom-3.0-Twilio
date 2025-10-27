@@ -95,7 +95,7 @@ You'll need to set up accounts with the following services:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/MindBoom-3.0-Twilio.git
+git clone https://github.com/Samdekian/MindBoom-3.0-Twilio.git
 cd MindBoom-3.0-Twilio
 ```
 
@@ -335,7 +335,7 @@ UNLICENSED - This is proprietary software. See [LICENSE](LICENSE) file for detai
 For support and questions:
 
 - Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/YOUR_USERNAME/MindBoom-3.0-Twilio/issues)
+- Issues: [GitHub Issues](https://github.com/Samdekian/MindBoom-3.0-Twilio/issues)
 - Email: support@mindboom.com
 
 ## Acknowledgments
