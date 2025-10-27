@@ -1,0 +1,85 @@
+
+import { Task } from "../TaskTypes";
+
+export const documentationTasks: Task[] = [
+  {
+    id: "doc-1",
+    title: "HIPAA Privacy Statement",
+    description: "Create comprehensive HIPAA privacy statement",
+    status: "implemented",
+    priority: "high",
+    category: "documentation",
+  },
+  {
+    id: "doc-2",
+    title: "User Guide",
+    description: "Create user guide for the application",
+    status: "implemented",
+    priority: "medium",
+    category: "documentation",
+  },
+  {
+    id: "doc-3",
+    title: "Admin Documentation",
+    description: "Create documentation for administrative users",
+    status: "implemented",
+    priority: "medium",
+    category: "documentation",
+  },
+  {
+    id: "doc-4",
+    title: "Webhook Testing Documentation",
+    description: "Document comprehensive webhook testing capabilities and best practices",
+    status: "implemented",
+    priority: "high",
+    category: "documentation",
+  },
+  {
+    id: "doc-5",
+    title: "Webhook Event Logging Guide",
+    description: "Create documentation for implementing and using webhook event logging features",
+    status: "implemented",
+    priority: "high",
+    category: "documentation",
+  },
+  {
+    id: "doc-6",
+    title: "Webhook Events Management",
+    description: "Document processes for viewing, analyzing and managing past webhook events",
+    status: "implemented",
+    priority: "medium",
+    category: "documentation",
+  },
+  {
+    id: "doc-7",
+    title: "Authentication System Documentation",
+    description: "Create comprehensive documentation of authentication system architecture",
+    status: "implemented",
+    priority: "high",
+    category: "documentation",
+  },
+  {
+    id: "doc-8",
+    title: "RBAC Implementation Guide",
+    description: "Document role-based access control implementation and best practices",
+    status: "implemented",
+    priority: "high",
+    category: "documentation",
+  },
+  {
+    id: "doc-9",
+    title: "Security Compliance Framework",
+    description: "Document security compliance requirements and implementation",
+    status: "implemented",
+    priority: "high",
+    category: "documentation",
+  },
+  {
+    id: "doc-10",
+    title: "Audit Logging Reference",
+    description: "Document audit logging system and event types for compliance",
+    status: "implemented",
+    priority: "medium",
+    category: "documentation",
+  }
+];

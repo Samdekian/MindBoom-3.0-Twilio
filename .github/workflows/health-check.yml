@@ -1,0 +1,111 @@
+
+name: Enhanced Health Check
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Run every 15 minutes
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to check'
+        type: choice
+        options:
+          - production
+          - staging
+        default: production
+        required: true
+
+jobs:
+  health-check:
+    name: Check Application Health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Check production endpoint
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.environment == 'production' }}
+        uses: jtalk/url-health-check-action@v3
+        with:
+          url: https://example.com/api/health
+          follow-redirect: true
+          max-attempts: 3
+          retry-delay: 5s
+          retry-all: true
+
+      - name: Check staging endpoint
+        if: ${{ github.event.inputs.environment == 'staging' }}
+        uses: jtalk/url-health-check-action@v3
+        with:
+          url: https://staging.example.com/api/health
+          follow-redirect: true
+          max-attempts: 3
+          retry-delay: 5s
+          retry-all: true
+      
+      - name: Run enhanced health check script
+        run: node scripts/health-check.js
+        env:
+          HEALTH_LOG_DIR: ./health-logs
+          NODE_ENV: production
+          ENDPOINT_BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'https://staging.example.com' || 'https://example.com' }}
+      
+      - name: Check system integration
+        run: |
+          curl -f -s -S -o /dev/null "https://$BASE_URL/api/system/integration-check" || exit 1
+        env:
+          BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'staging.example.com' || 'example.com' }}
+      
+      # New security-specific checks
+      - name: Run security checks
+        run: |
+          echo "Running security validation checks..."
+          node scripts/security-check.js
+        env:
+          SECURITY_LOG_DIR: ./security-logs
+          NODE_ENV: ${{ github.event.inputs.environment || 'production' }}
+          BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'staging.example.com' || 'example.com' }}
+      
+      - name: Check for security anomalies
+        run: |
+          echo "Checking for security anomalies..."
+          curl -f -s -S -H "Authorization: Bearer ${{ secrets.SECURITY_MONITOR_TOKEN }}" \
+            "https://$BASE_URL/api/security/anomaly-check" || echo "::warning::Anomaly check failed but continuing"
+        env:
+          BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'staging.example.com' || 'example.com' }}
+      
+      - name: Upload health check logs as artifacts
+        if: always()  # Upload logs even if checks fail
+        uses: actions/upload-artifact@v3
+        with:
+          name: health-check-logs-${{ github.run_number }}
+          path: ./health-logs
+          retention-days: 7
+      
+      # New security logs artifact upload
+      - name: Upload security check logs as artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-check-logs-${{ github.run_number }}
+          path: ./security-logs
+          retention-days: 30  # Longer retention for security logs
+      
+      - name: Send Notification on Failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: monitoring-alerts
+          SLACK_COLOR: danger
+          SLACK_TITLE: Health Check Failed
+          SLACK_MESSAGE: "Health check failed for ${{ github.event.inputs.environment || 'production' }} environment. See GitHub Actions for details."

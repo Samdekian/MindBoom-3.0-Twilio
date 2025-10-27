@@ -1,0 +1,193 @@
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core Design System Colors */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    
+    --accent: 210 40% 96%;
+    --accent-foreground: 222.2 84% 4.9%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    
+    --radius: 0.5rem;
+    
+    /* Sidebar Variables */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Therapy Brand Colors */
+    --therapy-purple: 267 62% 76%;
+    --therapy-deep-purple: 267 34% 51%;
+    --therapy-light-purple: 267 100% 98%;
+    --therapy-blue: 210 100% 92%;
+    --therapy-charcoal: 268 11% 14%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    
+    /* Dark mode sidebar */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 94.1%;
+    --sidebar-primary-foreground: 240 5.9% 10%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", sans-serif;
+  }
+  
+  /* Consistent layout base */
+  .app-layout {
+    @apply min-h-screen bg-background;
+  }
+  
+  .dashboard-layout {
+    @apply h-screen w-full bg-gray-50 dark:bg-gray-900 overflow-hidden;
+  }
+  
+  .main-content {
+    @apply flex-1 overflow-auto h-full;
+  }
+  
+  .content-container {
+    @apply max-w-7xl mx-auto p-6;
+  }
+
+  /* Mobile-first optimizations */
+  @media (max-width: 768px) {
+    .content-container {
+      @apply p-4;
+    }
+    
+    /* Touch target optimization */
+    button, .btn, [role="button"] {
+      @apply min-h-[44px] min-w-[44px];
+    }
+    
+    /* Improved touch interactions */
+    .touch-optimized {
+      @apply touch-manipulation select-none;
+    }
+    
+    /* Reduced motion for performance */
+    .reduce-motion {
+      @apply transition-none;
+    }
+    
+    /* Mobile-specific spacing */
+    .mobile-spacing {
+      @apply space-y-4;
+    }
+    
+    /* Optimized input fields */
+    input, textarea, select {
+      @apply text-base; /* Prevents zoom on iOS */
+    }
+  }
+
+  /* Performance optimizations */
+  .will-change-transform {
+    will-change: transform;
+  }
+  
+  .will-change-opacity {
+    will-change: opacity;
+  }
+  
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  /* Responsive video container */
+  .video-container {
+    @apply aspect-video w-full bg-black rounded-lg overflow-hidden;
+  }
+  
+  .video-container video {
+    @apply w-full h-full object-cover;
+  }
+
+  /* Loading states */
+  .loading-shimmer {
+    background: linear-gradient(90deg, 
+      hsl(var(--muted)) 0%, 
+      hsl(var(--muted-foreground) / 0.1) 50%, 
+      hsl(var(--muted)) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}

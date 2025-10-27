@@ -1,0 +1,102 @@
+
+# Role-Based Access Control Architecture
+
+## Overview
+
+The RBAC system provides role-based and permission-based access control for the application. It's designed to be flexible, performant, and type-safe.
+
+## Core Components
+
+### 1. Authentication & Authorization Context
+
+The `AuthRBACContext` is the central provider for all authentication and authorization needs. It combines:
+- User authentication state
+- Role-based access control
+- Permission-based checks
+- Field-level security
+
+```tsx
+// Usage example:
+const { user, hasRole, hasPermission } = useAuthRBAC();
+
+if (hasRole('admin')) {
+  // Show admin features
+}
+
+if (hasPermission('patients', 'read')) {
+  // Show patient data
+}
+```
+
+### 2. Role Types
+
+We use strongly typed roles to ensure type safety throughout the application:
+
+```tsx
+// Valid user roles in the system
+export type UserRole = 'admin' | 'therapist' | 'patient' | 'support';
+```
+
+This prevents typos and ensures consistency when checking roles.
+
+### 3. Protected Route Components
+
+Two main components handle route protection:
+
+- `RoleProtectedRoute`: Protects routes based on user roles
+- `PermissionProtectedRoute`: Protects routes based on specific permissions
+
+Example:
+```tsx
+<RoleProtectedRoute allowedRoles={['admin', 'therapist']}>
+  <TherapySessionPage />
+</RoleProtectedRoute>
+```
+
+### 4. Role-Based Components
+
+Several components facilitate conditional rendering based on roles:
+
+- `RoleBasedContainer`: Shows/hides content based on roles
+- `RoleBasedField`: Applies field-level security (read-only, hidden, masked)
+- `PermissionGuard`: Shows/hides content based on permissions
+
+### 5. Data Flow
+
+```
+User Login → Auth Context → Role & Permission Fetching → 
+Role Validation → RBAC Context → Protected Components
+```
+
+## Database Structure
+
+The RBAC system relies on these database tables:
+- `user_roles`: Associates users with roles
+- `roles`: Defines available roles
+- `permissions`: Defines available permissions
+- `role_permissions`: Associates roles with permissions
+
+## Role Validation & Repair
+
+To ensure data consistency:
+1. Roles are validated upon fetching
+2. Invalid roles are filtered out automatically
+3. The `useRBACIntegrity` hook provides tools to detect and repair role inconsistencies
+
+## Optimizations
+
+1. Role checking is memoized to prevent unnecessary re-renders
+2. Permission checks are cached for performance
+3. Role data is loaded only when needed and cached appropriately
+
+## Best Practices
+
+1. Always use the typed `UserRole` type for role values
+2. Prefer `useAuthRBAC()` over the deprecated `useRBAC()`
+3. Use the most specific protection component for your needs
+4. For testing, use the `MockAuthRBACProvider` to simulate different roles
+
+## Migration Notes
+
+The legacy role system allowed for roles like 'guest' and 'user', which have been deprecated.
+Use the Role Migration Utility to help migrate users to the new role system.

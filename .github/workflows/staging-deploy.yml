@@ -1,0 +1,156 @@
+
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run security scan
+        run: npx audit-ci --moderate  # Fail on moderate security vulnerabilities for staging
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.STAGING_API_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          VITE_SUPABASE_KEY: ${{ secrets.STAGING_SUPABASE_KEY }}
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: ./dist/
+          retention-days: 7
+
+  security-validation:
+    name: Security Validation
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: ./dist/
+      - name: Run security validation
+        run: node scripts/security-validation.js --environment=staging
+      - name: Generate security report
+        if: always()
+        run: node scripts/generate-security-report.js --environment=staging
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: staging-security-report-${{ github.run_number }}
+          path: ./security-report/
+          retention-days: 30
+
+  deploy:
+    name: Deploy to Staging
+    needs: [build, security-validation]
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.example.com
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-artifacts
+          path: ./dist/
+      
+      - name: Deploy to staging server
+        id: deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.STAGING_FTP_SERVER }}
+          username: ${{ secrets.STAGING_FTP_USERNAME }}
+          password: ${{ secrets.STAGING_FTP_PASSWORD }}
+          local-dir: ./dist/
+          server-dir: ./
+      
+      - name: Post-deployment health check
+        id: health_check
+        run: |
+          echo "Running health check..."
+          attempt=1
+          max_attempts=3
+          until curl -f -s -S -o /dev/null "https://staging.example.com/api/health" || [ $attempt -gt $max_attempts ]
+          do
+            echo "Health check attempt $attempt failed, retrying in 5 seconds..."
+            sleep 5
+            attempt=$((attempt+1))
+          done
+          
+          if [ $attempt -gt $max_attempts ]; then
+            echo "::warning::Health check failed after $max_attempts attempts, but won't trigger rollback in staging"
+          else
+            echo "Health check passed on attempt $attempt"
+          fi
+      
+      - name: Run E2E Tests
+        id: e2e_tests
+        run: |
+          echo "Running basic E2E tests against staging environment..."
+          # This would typically run a basic test suite against the staging environment
+          # For demonstration purposes, we'll just check if the site is up
+          if curl -s -o /dev/null -w "%{http_code}" https://staging.example.com | grep -q "200\|301\|302"; then
+            echo "Site is responding with a success status code"
+          else
+            echo "::warning::Site is not responding with a success status code"
+            exit 1
+          fi
+      
+      # New security scan step
+      - name: Run security scan
+        id: security_scan
+        run: |
+          echo "Running security scan on deployed application..."
+          curl -s -H "Authorization: Bearer ${{ secrets.SECURITY_SCAN_TOKEN }}" \
+            -X POST "https://security-scanner.example.com/api/scan" \
+            -d "{\"target_url\":\"https://staging.example.com\", \"scan_type\":\"quick\"}" \
+            > security-scan-results.json
+          
+          # Check results for critical issues
+          if grep -q "\"severity\":\"critical\"" security-scan-results.json; then
+            echo "::warning::Critical security issues found in scan"
+            cat security-scan-results.json
+          else
+            echo "No critical security issues found"
+          fi
+      
+      - name: Upload security scan results
+        if: always() && steps.security_scan.outcome != 'skipped'
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-scan-results-${{ github.run_number }}
+          path: ./security-scan-results.json
+          retention-days: 30
+      
+      - name: Notify team
+        if: always()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: deployments
+          SLACK_COLOR: ${{ job.status == 'success' && 'good' || 'danger' }}
+          SLACK_TITLE: Staging Deployment ${{ job.status == 'success' && 'Successful' || 'Failed' }}
+          SLACK_MESSAGE: "Deployment to staging ${{ job.status == 'success' && 'completed successfully.' || 'failed.' }} Check GitHub Actions for details."
