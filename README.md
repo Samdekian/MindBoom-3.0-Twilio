@@ -3,7 +3,7 @@
 ![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)
 ![License](https://img.shields.io/badge/license-UNLICENSED-red.svg)
 
-> AI-powered video therapy platform with secure, HIPAA-compliant communication powered by Twilio WebRTC, Agora.io, and OpenAI integration
+> AI-powered video therapy platform with secure, HIPAA-compliant communication powered by Twilio Video, breakout rooms, and OpenAI integration
 
 ## Overview
 
@@ -12,10 +12,13 @@ MindBoom 3.0 - Twilio is a comprehensive video therapy platform designed for men
 ## Key Features
 
 ### 🎥 Video Conferencing
-- **Twilio TURN Servers**: Reliable NAT traversal and connection establishment
-- **Agora.io Integration**: High-quality video/audio streaming with cloud recording
-- **WebRTC Technology**: Peer-to-peer communication with fallback options
+- **Twilio Video SDK**: Enterprise-grade video infrastructure with up to 50 participants
+- **Breakout Rooms**: Split group sessions into separate rooms for focused discussions
+- **Automatic Assignment**: Random or manual participant distribution to breakout rooms
+- **Real-time Management**: Move participants between rooms during active sessions
 - **Adaptive Quality**: Dynamic bitrate adjustment based on network conditions
+- **Network Quality Monitoring**: Real-time connection quality indicators
+- **Automatic Reconnection**: Seamless recovery from connection drops
 - **Screen Sharing**: Share presentations and documents during sessions
 
 ### 🤖 AI Integration
