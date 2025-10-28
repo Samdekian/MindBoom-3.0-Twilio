@@ -10,12 +10,21 @@ import {
   Monitor, 
   MonitorOff,
   RotateCcw,
-  Loader2
+  Loader2,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DeviceSettings from './DeviceSettings';
 import ConnectionQualityIndicator from './ConnectionQualityIndicator';
 import { AdaptiveQualityControls } from './AdaptiveQualityControls';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import BreakoutRoomManager from '../breakout/BreakoutRoomManager';
 
 interface SessionControlsProps {
   isVideoEnabled: boolean;
@@ -30,6 +39,8 @@ interface SessionControlsProps {
   adaptationControls?: any; // Network adaptation controls
   disabled?: boolean;
   className?: string;
+  sessionId?: string;
+  isTherapist?: boolean;
 }
 
 export const SessionControls: React.FC<SessionControlsProps> = ({
@@ -44,13 +55,16 @@ export const SessionControls: React.FC<SessionControlsProps> = ({
   qualityMetrics,
   adaptationControls,
   disabled = false,
-  className
+  className,
+  sessionId,
+  isTherapist = false
 }) => {
   const [isTogglingVideo, setIsTogglingVideo] = useState(false);
   const [isTogglingAudio, setIsTogglingAudio] = useState(false);
   const [isTogglingScreen, setIsTogglingScreen] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
+  const [showBreakoutRooms, setShowBreakoutRooms] = useState(false);
 
   const handleToggleVideo = async () => {
     if (isTogglingVideo || disabled) return;
@@ -164,6 +178,20 @@ export const SessionControls: React.FC<SessionControlsProps> = ({
           </Button>
         )}
 
+        {/* Breakout Rooms - Therapists only */}
+        {isTherapist && sessionId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setShowBreakoutRooms(true)}
+            disabled={disabled || !isConnected}
+          >
+            <Users className="h-4 w-4" />
+            Breakout Rooms
+          </Button>
+        )}
+
         {/* Device Settings */}
         <Button
           variant="outline"
@@ -231,6 +259,29 @@ export const SessionControls: React.FC<SessionControlsProps> = ({
         open={showDeviceSettings}
         onOpenChange={setShowDeviceSettings}
       />
+
+      {/* Breakout Rooms Dialog */}
+      {isTherapist && sessionId && (
+        <Dialog open={showBreakoutRooms} onOpenChange={setShowBreakoutRooms}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                  <Users className="h-4 w-4 text-white" />
+                </div>
+                Breakout Rooms
+              </DialogTitle>
+              <DialogDescription>
+                Create and manage breakout rooms for focused group discussions
+              </DialogDescription>
+            </DialogHeader>
+            <BreakoutRoomManager 
+              sessionId={sessionId} 
+              isTherapist={isTherapist} 
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 };

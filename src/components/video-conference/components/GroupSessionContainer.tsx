@@ -10,7 +10,6 @@ import { ConnectionStatus } from './ConnectionStatus';
 import ConnectionStatusOverlay from './ConnectionStatusOverlay';
 import { useEnhancedDeviceManager } from '@/hooks/video-conference/use-enhanced-device-manager';
 import { SessionControls } from './SessionControls';
-import BreakoutRoomManager from '../breakout/BreakoutRoomManager';
 
 interface GroupSessionContainerProps {
   sessionId: string;
@@ -187,15 +186,6 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
           </Button>
         </div>
 
-        {/* Breakout Rooms Panel - Only for therapists */}
-        {isTherapist && (
-          <div className="px-4 py-3 border-b border-border bg-slate-50">
-            <BreakoutRoomManager 
-              sessionId={sessionId} 
-              isTherapist={isTherapist} 
-            />
-          </div>
-        )}
 
         {/* Video Grid Area */}
         <div className="flex-1 bg-slate-50 p-4">
@@ -296,6 +286,8 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
             onReconnect={reconnectSession}
             connectionState={connectionState}
             disabled={connectionState === 'CONNECTING'}
+            sessionId={sessionId}
+            isTherapist={isTherapist}
           />
         </div>
       </div>
