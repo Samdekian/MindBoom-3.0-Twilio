@@ -11,7 +11,9 @@ import {
   MonitorOff,
   RotateCcw,
   Loader2,
-  Users
+  Users,
+  Share2,
+  Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DeviceSettings from './DeviceSettings';
@@ -25,6 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import BreakoutRoomManager from '../breakout/BreakoutRoomManager';
+import { useToast } from '@/hooks/use-toast';
 
 interface SessionControlsProps {
   isVideoEnabled: boolean;
@@ -65,6 +68,8 @@ export const SessionControls: React.FC<SessionControlsProps> = ({
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [showDeviceSettings, setShowDeviceSettings] = useState(false);
   const [showBreakoutRooms, setShowBreakoutRooms] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const { toast } = useToast();
 
   const handleToggleVideo = async () => {
     if (isTogglingVideo || disabled) return;
@@ -112,6 +117,29 @@ export const SessionControls: React.FC<SessionControlsProps> = ({
 
   const isConnected = connectionState === 'CONNECTED';
   const needsReconnection = connectionState === 'FAILED' || connectionState === 'DISCONNECTED';
+
+  const handleCopyShareLink = async () => {
+    if (!sessionId) return;
+
+    const shareUrl = `${window.location.origin}/video-conference/${sessionId}?join=true`;
+    
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setLinkCopied(true);
+      toast({
+        title: 'Link copied!',
+        description: 'Session link copied to clipboard',
+      });
+      
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (error) {
+      toast({
+        title: 'Failed to copy',
+        description: 'Please copy the link manually',
+        variant: 'destructive'
+      });
+    }
+  };
 
   return (
     <>
@@ -175,6 +203,31 @@ export const SessionControls: React.FC<SessionControlsProps> = ({
               <MonitorOff className="h-4 w-4" />
             )}
             {isScreenSharing ? 'Stop Share' : 'Share Screen'}
+          </Button>
+        )}
+
+        {/* Share Link */}
+        {sessionId && (
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "gap-2",
+              linkCopied && "bg-green-50 border-green-300 text-green-700"
+            )}
+            onClick={handleCopyShareLink}
+          >
+            {linkCopied ? (
+              <>
+                <Check className="h-4 w-4" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Share2 className="h-4 w-4" />
+                Share Link
+              </>
+            )}
           </Button>
         )}
 
