@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Share2, Users } from "lucide-react";
 import GroupSessionContainer from "./components/GroupSessionContainer";
+import BreakoutRoomManager from "./breakout/BreakoutRoomManager";
 
 const VideoConferenceContent: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -111,6 +112,16 @@ const VideoConferenceContent: React.FC = () => {
                   )}
                 </div>
               </div>
+              
+              {/* Breakout Rooms Panel - Only for therapists when in session */}
+              {isTherapist && isInSession && sessionId && (
+                <div className="p-4 border-b border-gray-200 bg-slate-50">
+                  <BreakoutRoomManager 
+                    sessionId={sessionId} 
+                    isTherapist={isTherapist} 
+                  />
+                </div>
+              )}
               
               {/* Main Session Content */}
               <div className="flex-1 overflow-hidden">
