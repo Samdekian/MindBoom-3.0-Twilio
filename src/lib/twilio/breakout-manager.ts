@@ -281,59 +281,97 @@ export class BreakoutRoomManager {
    * Get all active breakout rooms
    */
   async getActiveRooms(): Promise<BreakoutRoomWithParticipants[]> {
-    const { data: rooms, error } = await supabase
-      .from('breakout_rooms')
-      .select(`
-        *,
-        participants:breakout_room_participants(*)
-      `)
-      .eq('session_id', this.sessionId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true });
+    try {
+      // First get rooms
+      const { data: rooms, error: roomsError } = await supabase
+        .from('breakout_rooms')
+        .select('*')
+        .eq('session_id', this.sessionId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true });
 
-    if (error) {
+      if (roomsError) {
+        console.error('❌ [BreakoutManager] Failed to get rooms:', roomsError);
+        return [];
+      }
+
+      if (!rooms || rooms.length === 0) {
+        return [];
+      }
+
+      // Then get participants for each room
+      const roomsWithParticipants = await Promise.all(
+        rooms.map(async (room) => {
+          const { data: participants, error: participantsError } = await supabase
+            .from('breakout_room_participants')
+            .select('*')
+            .eq('breakout_room_id', room.id)
+            .eq('is_active', true);
+
+          if (participantsError) {
+            console.error('❌ [BreakoutManager] Failed to get participants for room:', room.id, participantsError);
+          }
+
+          return {
+            ...room,
+            participants: participants || []
+          };
+        })
+      );
+
+      return roomsWithParticipants;
+    } catch (error) {
       console.error('❌ [BreakoutManager] Failed to get rooms:', error);
-      throw error;
+      return [];
     }
-
-    return (rooms as any[]).map(room => ({
-      ...room,
-      participants: room.participants || []
-    }));
   }
 
   /**
    * Get participant assignments
    */
   async getParticipantAssignments(): Promise<ParticipantAssignment[]> {
-    const { data, error } = await supabase
-      .from('instant_session_participants')
-      .select(`
-        id,
-        participant_name,
-        user_id,
-        breakout_room_participants!inner(
-          breakout_room_id,
-          breakout_rooms!inner(
-            room_name
-          )
-        )
-      `)
-      .eq('session_id', this.sessionId)
-      .eq('is_active', true);
+    try {
+      // Get all session participants
+      const { data: participants, error: participantsError } = await supabase
+        .from('instant_session_participants')
+        .select('id, participant_name, user_id')
+        .eq('session_id', this.sessionId)
+        .eq('is_active', true);
 
-    if (error) {
+      if (participantsError) {
+        console.error('❌ [BreakoutManager] Failed to get participants:', participantsError);
+        return [];
+      }
+
+      if (!participants || participants.length === 0) {
+        return [];
+      }
+
+      // Get current breakout room assignments for each participant
+      const assignments = await Promise.all(
+        participants.map(async (participant) => {
+          const { data: assignment } = await supabase
+            .from('breakout_room_participants')
+            .select('breakout_room_id, breakout_rooms(room_name)')
+            .eq('participant_id', participant.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          return {
+            participant_id: participant.id,
+            participant_name: participant.participant_name,
+            user_id: participant.user_id,
+            breakout_room_id: assignment?.breakout_room_id || null,
+            breakout_room_name: (assignment as any)?.breakout_rooms?.room_name || null
+          };
+        })
+      );
+
+      return assignments;
+    } catch (error) {
       console.error('❌ [BreakoutManager] Failed to get assignments:', error);
       return [];
     }
-
-    return (data as any[]).map(p => ({
-      participant_id: p.id,
-      participant_name: p.participant_name,
-      user_id: p.user_id,
-      breakout_room_id: p.breakout_room_participants?.[0]?.breakout_room_id || null,
-      breakout_room_name: p.breakout_room_participants?.[0]?.breakout_rooms?.room_name || null
-    }));
   }
 
   /**
