@@ -544,7 +544,22 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
         }
       }
 
-      // Attempt to register participant
+      // Check if user already has an active participant record in another session
+      // (Trigger will handle this, but we check first for better UX)
+      const { data: existingParticipant } = await supabase
+        .from('instant_session_participants')
+        .select('id, session_id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .neq('session_id', sessionId)
+        .limit(1)
+        .single();
+
+      if (existingParticipant) {
+        console.log('⚠️ [VideoSession] User has active session elsewhere, will be deactivated automatically');
+      }
+
+      // Attempt to register participant (trigger will handle duplicates)
       const { error } = await supabase
         .from('instant_session_participants')
         .upsert({
