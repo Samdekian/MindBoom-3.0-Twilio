@@ -26,7 +26,7 @@ This guide provides step-by-step instructions to fork this application to GitHub
 2. Click the **"+"** icon in the top right
 3. Select **"New repository"**
 4. Configure your repository:
-   - **Repository name**: `MindBoom-3.0-Twilio`
+   - **Repository name**: `mind-bloom-spark`
    - **Description**: `AI-powered video therapy platform with Twilio WebRTC, Agora.io, and OpenAI integration`
    - **Visibility**: 
      - **Private** (recommended for initial setup)
@@ -92,7 +92,7 @@ Replace `YOUR_GITHUB_USERNAME` with your actual GitHub username:
 
 ```bash
 # Add GitHub remote (replace YOUR_GITHUB_USERNAME)
-git remote add origin https://github.com/YOUR_GITHUB_USERNAME/MindBoom-3.0-Twilio.git
+git remote add origin https://github.com/YOUR_GITHUB_USERNAME/mind-bloom-spark.git
 
 # Verify remote
 git remote -v
@@ -258,8 +258,8 @@ For other developers to work on this project:
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/MindBoom-3.0-Twilio.git
-cd MindBoom-3.0-Twilio
+git clone https://github.com/YOUR_USERNAME/mind-bloom-spark.git
+cd mind-bloom-spark
 
 # Install dependencies
 npm install
@@ -304,7 +304,7 @@ git push origin feature/your-feature-name
 If you're contributing to someone else's fork:
 
 ```bash
-git remote add upstream https://github.com/ORIGINAL_OWNER/MindBoom-3.0-Twilio.git
+git remote add upstream https://github.com/ORIGINAL_OWNER/mind-bloom-spark.git
 git fetch upstream
 git checkout develop
 git merge upstream/develop

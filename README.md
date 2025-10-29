@@ -98,8 +98,8 @@ You'll need to set up accounts with the following services:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Samdekian/MindBoom-3.0-Twilio.git
-cd MindBoom-3.0-Twilio
+git clone https://github.com/Samdekian/mind-bloom-spark.git
+cd mind-bloom-spark
 ```
 
 ### 2. Install Dependencies
@@ -338,7 +338,7 @@ UNLICENSED - This is proprietary software. See [LICENSE](LICENSE) file for detai
 For support and questions:
 
 - Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/Samdekian/MindBoom-3.0-Twilio/issues)
+- Issues: [GitHub Issues](https://github.com/Samdekian/mind-bloom-spark/issues)
 - Email: support@mindboom.com
 
 ## Acknowledgments
