@@ -13,12 +13,36 @@ export const useAuthOperations = () => {
       const result = await signInWithRoleSync(email, password);
       if (!result.success) throw result.error;
       
-      // Check therapist approval status after successful login
-      if (result.user) {
-        setIsCheckingApproval(true);
-        try {
-          if (result.roles?.includes('therapist')) {
+      // OPTIMIZATION: Check therapist approval status with cache
+      if (result.user && result.roles?.includes('therapist')) {
+        // Check if we verified approval recently (within last 24 hours)
+        const cacheKey = `approval_check_${result.user.id}`;
+        const cachedCheck = localStorage.getItem(cacheKey);
+        const now = Date.now();
+        const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+        
+        let shouldCheck = true;
+        if (cachedCheck) {
+          try {
+            const cachedData = JSON.parse(cachedCheck);
+            const timeSinceCheck = now - cachedData.timestamp;
+            
+            // If checked recently and was approved, skip check
+            if (timeSinceCheck < CACHE_DURATION && cachedData.approved === true) {
+              shouldCheck = false;
+              console.log('[Auth] Using cached approval status (approved)');
+            }
+          } catch (e) {
+            // Invalid cache, will check again
+            localStorage.removeItem(cacheKey);
+          }
+        }
+        
+        if (shouldCheck) {
+          setIsCheckingApproval(true);
+          try {
             const { approved, status } = await checkTherapistApprovalStatus(result.user.id);
+            
             if (!approved && status === 'pending') {
               toast({
                 title: "Access Restricted",
@@ -35,10 +59,17 @@ export const useAuthOperations = () => {
               });
               await signOutUser();
               throw new Error("Therapist account rejected");
+            } else if (approved) {
+              // Cache the approval status
+              localStorage.setItem(cacheKey, JSON.stringify({
+                approved: true,
+                timestamp: now
+              }));
+              console.log('[Auth] Therapist approval verified and cached');
             }
+          } finally {
+            setIsCheckingApproval(false);
           }
-        } finally {
-          setIsCheckingApproval(false);
         }
       }
       

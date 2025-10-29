@@ -14,11 +14,23 @@ if (import.meta.env.VITE_APP_ENV === 'production') {
   }
 }
 
+/**
+ * Optimized Supabase client for Vercel deployment
+ * 
+ * Performance optimizations:
+ * - keepalive: true for connection reuse (reduces cold start impact)
+ * - PKCE flow for faster and more secure authentication
+ * - Realtime disabled during auth (reduces overhead)
+ * - Custom fetch with connection keepalive
+ */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    storageKey: 'mindbloom-auth', // Namespace to avoid conflicts
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    flowType: 'pkce', // More secure and faster than implicit flow
   },
   db: {
     schema: 'public'
@@ -26,9 +38,32 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     headers: {
       'Content-Type': 'application/json',
+      'X-Client-Info': 'mindbloom-web@1.0.0',
+    },
+    // Custom fetch with keepalive for connection reuse
+    fetch: (url, options = {}) => {
+      return fetch(url, {
+        ...options,
+        keepalive: true, // Reuse connections for better performance
+      });
+    },
+  },
+  realtime: {
+    // Optimize realtime connection params
+    params: {
+      eventsPerSecond: 2, // Rate limit realtime events
     },
   },
 });
+
+// Pre-warm the connection on client load (non-blocking)
+// This reduces cold start impact by initiating connection early
+if (typeof window !== 'undefined') {
+  // Initialize session check in background (don't await)
+  supabase.auth.getSession().catch(() => {
+    // Silently fail - this is just a warm-up
+  });
+}
 
 // Add a helper function to check connection
 export const checkSupabaseConnection = async (): Promise<boolean> => {

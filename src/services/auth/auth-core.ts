@@ -68,6 +68,7 @@ export const signUpWithRole = async (
 
 /**
  * Sign in a user and ensure their roles are properly synchronized
+ * OPTIMIZED: Uses cached roles from user metadata first, then syncs in background
  */
 export const signInWithRoleSync = async (
   email: string,
@@ -83,11 +84,33 @@ export const signInWithRoleSync = async (
     if (error) throw error;
     if (!data.user) throw new Error("Sign in failed");
 
-    // Get the user's roles from the RBAC system
-    const roles = await getUserRolesFromDB(data.user.id);
+    // OPTIMIZATION: Get roles from user metadata first (instant, cached)
+    let roles: UserRole[] = [];
     
-    // Ensure the user's roles are properly synchronized
-    setTimeout(() => syncUserRoles(data.user.id), 0);
+    // Try to get roles from metadata (fastest)
+    const metadataRoles = data.user.user_metadata?.roles;
+    if (metadataRoles && Array.isArray(metadataRoles) && metadataRoles.length > 0) {
+      roles = metadataRoles;
+    } else if (data.user.user_metadata?.accountType) {
+      // Fallback to accountType if roles not in metadata
+      const accountType = data.user.user_metadata.accountType;
+      const roleMap: Record<string, UserRole> = {
+        'admin': 'admin',
+        'therapist': 'therapist',
+        'patient': 'patient',
+        'support': 'support'
+      };
+      roles = [roleMap[accountType] || 'patient'];
+    }
+    
+    // If no roles in metadata, fetch from database (slower but necessary)
+    if (roles.length === 0) {
+      roles = await getUserRolesFromDB(data.user.id);
+    }
+    
+    // Synchronize roles in BACKGROUND (non-blocking)
+    // This ensures metadata stays in sync with database without slowing login
+    setTimeout(() => syncUserRoles(data.user.id), 100);
 
     return {
       success: true,
