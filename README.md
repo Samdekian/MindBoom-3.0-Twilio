@@ -245,6 +245,34 @@ mindboom-3.0-twilio/
 └── tests/               # Test files
 ```
 
+## Staging Environment
+
+**Quick Start**: See [STAGING_QUICK_START.md](STAGING_QUICK_START.md) for rapid staging setup!
+
+### Staging Resources
+
+- **Supabase Project**: `aoumioacfvttagverbna`
+- **Repository**: https://github.com/Samdekian/mind-bloom-spark
+
+### Staging Setup Guides
+
+- **[Staging Quick Start](STAGING_QUICK_START.md)** - Get staging running in minutes
+- **[Staging Setup Guide](docs/STAGING_SETUP.md)** - Complete staging configuration
+- **[Secrets Configuration](docs/SECRETS_CONFIGURATION_GUIDE.md)** - Configure all API keys
+- **[Edge Functions Guide](docs/EDGE_FUNCTIONS_DEPLOY_GUIDE.md)** - Deploy backend functions
+- **[Frontend Deploy Guide](docs/FRONTEND_DEPLOY_GUIDE.md)** - Deploy React application
+- **[Staging Checklist](STAGING_CHECKLIST.md)** - Validation checklist
+
+### Automated Setup
+
+```bash
+# One-command staging setup
+./scripts/setup-staging.sh
+
+# Validate staging environment
+./scripts/validate-staging.sh
+```
+
 ## Production Deployment
 
 See the comprehensive production setup guides:
