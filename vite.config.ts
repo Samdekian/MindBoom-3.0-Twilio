@@ -26,15 +26,18 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            // Keep recharts with vendor to avoid initialization order issues
             if (id.includes('@radix-ui/react-')) {
               return 'ui-components';
             }
-            if (id.includes('recharts')) {
-              return 'charts';
-            }
+            // Remove separate charts chunk - causes TDZ errors
+            // if (id.includes('recharts')) {
+            //   return 'charts';
+            // }
             if (id.includes('lucide-react')) {
               return 'icons';
             }
+            // All other node_modules including recharts go to vendor
             return 'vendor';
           }
         }
@@ -55,6 +58,7 @@ export default defineConfig(({ mode }) => ({
       'react-router-dom', 
       '@radix-ui/react-dialog',
       'lucide-react',
+      'recharts', // Pre-bundle recharts to avoid chunk issues
     ],
     force: true,
   },
