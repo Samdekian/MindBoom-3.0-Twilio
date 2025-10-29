@@ -98,8 +98,8 @@ You'll need to set up accounts with the following services:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Samdekian/mind-boom-spark.git
-cd mind-boom-spark
+git clone https://github.com/samdekian/MindBoom-3.0-Twilio.git
+cd MindBoom-3.0-Twilio
 ```
 
 ### 2. Install Dependencies

@@ -6,7 +6,7 @@ Get your staging environment up and running in minutes!
 
 ```bash
 # 1. Clone repository (when available)
-git clone https://github.com/Samdekian/mind-boom-spark.git
+git clone https://github.com/samdekian/MindBoom-3.0-Twilio.git
 cd mind-boom-spark
 
 # 2. Run automated setup
@@ -30,7 +30,7 @@ vercel --prod
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/Samdekian/mind-boom-spark.git
+git clone https://github.com/samdekian/MindBoom-3.0-Twilio.git
 cd mind-boom-spark
 ```
 

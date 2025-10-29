@@ -357,7 +357,7 @@ The repository already has `.github/workflows/deploy-staging.yml` configured.
 **To enable**:
 1. Add GitHub secrets (see SECRETS_CONFIGURATION_GUIDE.md)
 2. Push to `develop` branch
-3. Monitor: https://github.com/Samdekian/mind-boom-spark/actions
+3. Monitor: https://github.com/samdekian/MindBoom-3.0-Twilio/actions
 
 ## Performance Optimization
 

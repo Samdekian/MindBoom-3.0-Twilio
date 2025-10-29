@@ -186,7 +186,7 @@ supabase functions invoke get-turn-credentials
 
 ### Access GitHub Secrets
 
-1. Go to: https://github.com/Samdekian/mind-boom-spark/settings/secrets/actions
+1. Go to: https://github.com/samdekian/MindBoom-3.0-Twilio/settings/secrets/actions
 2. Click **"New repository secret"**
 
 ### Required GitHub Secrets

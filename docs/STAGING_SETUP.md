@@ -4,7 +4,7 @@ Complete guide for setting up and deploying the staging environment for MindBoom
 
 ## Overview
 
-**Repository**: https://github.com/Samdekian/mind-boom-spark  
+**Repository**: https://github.com/samdekian/MindBoom-3.0-Twilio  
 **Supabase Project**: `aoumioacfvttagverbna`  
 **Environment**: Staging  
 **Purpose**: Pre-production testing and QA

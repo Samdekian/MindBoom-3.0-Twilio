@@ -56,7 +56,7 @@ RUN rm -rf /usr/share/nginx/html/index.html /usr/share/nginx/html/50x.html
 LABEL maintainer="MindBoom Team" \
       version="3.0.0" \
       description="MindBoom 3.0 - Twilio Video Therapy Platform" \
-      org.opencontainers.image.source="https://github.com/Samdekian/mind-boom-spark"
+      org.opencontainers.image.source="https://github.com/samdekian/MindBoom-3.0-Twilio"
 
 # Expose ports
 EXPOSE 80

@@ -4,7 +4,7 @@
 
 Data: 2025-10-27  
 Projeto: MindBoom Spark  
-Repositório: https://github.com/Samdekian/mind-boom-spark  
+Repositório: https://github.com/samdekian/MindBoom-3.0-Twilio  
 Supabase Staging: aoumioacfvttagverbna
 
 ---
@@ -115,7 +115,7 @@ Supabase Staging: aoumioacfvttagverbna
 ## 🎯 RECURSOS CONFIGURADOS
 
 ### GitHub
-- **Repositório**: https://github.com/Samdekian/mind-boom-spark
+- **Repositório**: https://github.com/samdekian/MindBoom-3.0-Twilio
 - **Visibilidade**: Private
 - **Branches**: main, develop
 - **SSH Key**: Configurada e ativa
@@ -255,7 +255,7 @@ supabase functions logs --tail
 - Troubleshooting: Cada guia tem seção própria
 
 **Links Úteis:**
-- GitHub: https://github.com/Samdekian/mind-boom-spark
+- GitHub: https://github.com/samdekian/MindBoom-3.0-Twilio
 - Supabase Dashboard: https://supabase.com/dashboard/project/aoumioacfvttagverbna
 - Twilio Console: https://console.twilio.com
 - OpenAI Platform: https://platform.openai.com

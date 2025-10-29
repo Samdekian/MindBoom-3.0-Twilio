@@ -173,7 +173,7 @@ Follow the checklist: [STAGING_CHECKLIST.md](STAGING_CHECKLIST.md)
 ### Staging Environment
 
 ```yaml
-Repository: https://github.com/Samdekian/mind-boom-spark
+Repository: https://github.com/samdekian/MindBoom-3.0-Twilio
 Supabase Project: aoumioacfvttagverbna
 Supabase URL: https://aoumioacfvttagverbna.supabase.co
 Environment: staging
@@ -232,7 +232,7 @@ supabase functions logs --tail
 
 ### Support
 - Email: support@mindboom.com
-- GitHub Issues: https://github.com/Samdekian/mind-boom-spark/issues
+- GitHub Issues: https://github.com/samdekian/MindBoom-3.0-Twilio/issues
 
 ## ✅ Success Criteria
 

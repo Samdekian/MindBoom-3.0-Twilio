@@ -2,7 +2,7 @@
 
 ## ✅ STATUS ATUAL
 
-**Repositório GitHub**: https://github.com/Samdekian/mind-boom-spark ✓  
+**Repositório GitHub**: https://github.com/samdekian/MindBoom-3.0-Twilio ✓  
 **Supabase Staging**: Project `aoumioacfvttagverbna` ✓  
 **Código**: Enviado para GitHub ✓  
 **Documentação**: Completa ✓  

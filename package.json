@@ -1,14 +1,14 @@
 {
-  "name": "mind-boom-spark",
+  "name": "mindboom-3.0-twilio",
   "version": "3.0.0",
-  "description": "MindBoom Spark - AI-powered video therapy platform with Twilio Video, breakout rooms, and OpenAI integration",
+  "description": "MindBoom 3.0 - Twilio - AI-powered video therapy platform with Twilio Video, breakout rooms, and OpenAI integration",
   "private": true,
   "type": "module",
   "author": "MindBoom Team",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Samdekian/mind-boom-spark.git"
+    "url": "https://github.com/samdekian/MindBoom-3.0-Twilio.git"
   },
   "keywords": [
     "video-conferencing",
