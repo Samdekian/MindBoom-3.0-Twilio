@@ -6,8 +6,8 @@ Get your staging environment up and running in minutes!
 
 ```bash
 # 1. Clone repository (when available)
-git clone https://github.com/Samdekian/mind-bloom-spark.git
-cd mind-bloom-spark
+git clone https://github.com/Samdekian/mind-boom-spark.git
+cd mind-boom-spark
 
 # 2. Run automated setup
 ./scripts/setup-staging.sh
@@ -30,8 +30,8 @@ vercel --prod
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/Samdekian/mind-bloom-spark.git
-cd mind-bloom-spark
+git clone https://github.com/Samdekian/mind-boom-spark.git
+cd mind-boom-spark
 ```
 
 ### 2. Install Dependencies

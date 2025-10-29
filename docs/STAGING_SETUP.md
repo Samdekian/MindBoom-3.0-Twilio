@@ -4,7 +4,7 @@ Complete guide for setting up and deploying the staging environment for MindBoom
 
 ## Overview
 
-**Repository**: https://github.com/Samdekian/mind-bloom-spark  
+**Repository**: https://github.com/Samdekian/mind-boom-spark  
 **Supabase Project**: `aoumioacfvttagverbna`  
 **Environment**: Staging  
 **Purpose**: Pre-production testing and QA
@@ -23,7 +23,7 @@ Complete guide for setting up and deploying the staging environment for MindBoom
 ## Prerequisites
 
 ### Required Accounts & Access
-- [x] GitHub repository: `mind-bloom-spark` created
+- [x] GitHub repository: `mind-boom-spark` created
 - [x] Supabase staging project created (ref: `aoumioacfvttagverbna`)
 - [ ] Twilio account with API keys
 - [ ] OpenAI API key
@@ -289,7 +289,7 @@ vercel
 
 # Follow prompts:
 # - Link to existing project? N
-# - Project name: mind-bloom-spark-staging
+# - Project name: mind-boom-spark-staging
 # - Directory: ./
 # - Override settings? N
 ```
@@ -304,7 +304,7 @@ Via Vercel Dashboard:
 VITE_SUPABASE_URL = https://aoumioacfvttagverbna.supabase.co
 VITE_SUPABASE_ANON_KEY = [your-anon-key]
 VITE_APP_ENV = staging
-VITE_APP_URL = https://mind-bloom-spark-staging.vercel.app
+VITE_APP_URL = https://mind-boom-spark-staging.vercel.app
 ```
 
 Or via CLI:
@@ -370,10 +370,10 @@ docker build \
   --build-arg VITE_SUPABASE_URL="https://aoumioacfvttagverbna.supabase.co" \
   --build-arg VITE_SUPABASE_ANON_KEY="your-key" \
   --build-arg VITE_APP_ENV="staging" \
-  -t mind-bloom-spark:staging .
+  -t mind-boom-spark:staging .
 
 # Run
-docker run -d -p 8080:80 --name mindboom-staging mind-bloom-spark:staging
+docker run -d -p 8080:80 --name mindboom-staging mind-boom-spark:staging
 ```
 
 ## Testing & Validation
@@ -441,7 +441,7 @@ BASE_URL=https://your-staging-url.com npm run test:e2e
 
 **Solution**: Create the repository on GitHub first:
 1. Go to https://github.com/new
-2. Repository name: `mind-bloom-spark`
+2. Repository name: `mind-boom-spark`
 3. Private/Public as desired
 4. Do NOT initialize with README
 5. Click "Create repository"

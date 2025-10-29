@@ -98,8 +98,8 @@ You'll need to set up accounts with the following services:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Samdekian/mind-bloom-spark.git
-cd mind-bloom-spark
+git clone https://github.com/Samdekian/mind-boom-spark.git
+cd mind-boom-spark
 ```
 
 ### 2. Install Dependencies
@@ -252,7 +252,7 @@ mindboom-3.0-twilio/
 ### Staging Resources
 
 - **Supabase Project**: `aoumioacfvttagverbna`
-- **Repository**: https://github.com/Samdekian/mind-bloom-spark
+- **Repository**: https://github.com/Samdekian/mind-boom-spark
 
 ### Staging Setup Guides
 
@@ -366,7 +366,7 @@ UNLICENSED - This is proprietary software. See [LICENSE](LICENSE) file for detai
 For support and questions:
 
 - Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/Samdekian/mind-bloom-spark/issues)
+- Issues: [GitHub Issues](https://github.com/Samdekian/mind-boom-spark/issues)
 - Email: support@mindboom.com
 
 ## Acknowledgments

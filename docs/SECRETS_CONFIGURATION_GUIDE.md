@@ -186,7 +186,7 @@ supabase functions invoke get-turn-credentials
 
 ### Access GitHub Secrets
 
-1. Go to: https://github.com/Samdekian/mind-bloom-spark/settings/secrets/actions
+1. Go to: https://github.com/Samdekian/mind-boom-spark/settings/secrets/actions
 2. Click **"New repository secret"**
 
 ### Required GitHub Secrets
@@ -354,5 +354,5 @@ For issues with secrets configuration:
 
 **Last Updated**: 2025-10-27  
 **Environment**: Staging  
-**Project**: mind-bloom-spark
+**Project**: mind-boom-spark
 

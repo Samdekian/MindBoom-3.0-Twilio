@@ -50,7 +50,7 @@ vercel
 # ? Set up and deploy "~/...mind-bloom-therapy-ai"? Y
 # ? Which scope? [Your account]
 # ? Link to existing project? N
-# ? What's your project's name? mind-bloom-spark-staging
+# ? What's your project's name? mind-boom-spark-staging
 # ? In which directory is your code located? ./
 # ? Want to override settings? N
 ```
@@ -60,7 +60,7 @@ vercel
 #### Via Vercel Dashboard (Recommended)
 
 1. Go to: https://vercel.com/dashboard
-2. Select your project: `mind-bloom-spark-staging`
+2. Select your project: `mind-boom-spark-staging`
 3. Go to: **Settings → Environment Variables**
 4. Add each variable for "Preview" and "Development":
 
@@ -78,7 +78,7 @@ Value: staging
 Environments: ✓ Preview  ✓ Development
 
 Name: VITE_APP_URL
-Value: https://mind-bloom-spark-staging.vercel.app
+Value: https://mind-boom-spark-staging.vercel.app
 Environments: ✓ Preview  ✓ Development
 ```
 
@@ -99,7 +99,7 @@ vercel env add VITE_APP_ENV
 # Select: Preview, Development
 
 vercel env add VITE_APP_URL
-# Enter: https://mind-bloom-spark-staging.vercel.app
+# Enter: https://mind-boom-spark-staging.vercel.app
 # Select: Preview, Development
 
 # List all environment variables
@@ -113,7 +113,7 @@ vercel env ls
 vercel --prod
 
 # You'll get a URL like:
-# https://mind-bloom-spark-staging.vercel.app
+# https://mind-boom-spark-staging.vercel.app
 ```
 
 ### Step 5: Configure Custom Domain (Optional)
@@ -129,9 +129,9 @@ vercel domains add staging.mindboom.app
 ### Step 6: Connect GitHub for Auto-Deploy
 
 1. Go to: https://vercel.com/dashboard
-2. Select project: `mind-bloom-spark-staging`
+2. Select project: `mind-boom-spark-staging`
 3. Go to: **Settings → Git**
-4. Connect repository: `Samdekian/mind-bloom-spark`
+4. Connect repository: `Samdekian/mind-boom-spark`
 5. Configure:
    - **Production Branch**: `main`
    - **Preview Branches**: `develop`, `staging`
@@ -157,7 +157,7 @@ netlify init
 # Answer prompts:
 # ? Create & configure a new site? Yes
 # ? Team: [Your team]
-# ? Site name: mind-bloom-spark-staging
+# ? Site name: mind-boom-spark-staging
 # ? Build command: npm run build:staging
 # ? Directory to deploy: dist
 # ? Create netlify.toml? Yes
@@ -170,7 +170,7 @@ netlify init
 netlify env:set VITE_SUPABASE_URL "https://aoumioacfvttagverbna.supabase.co"
 netlify env:set VITE_SUPABASE_ANON_KEY "your-anon-key"
 netlify env:set VITE_APP_ENV "staging"
-netlify env:set VITE_APP_URL "https://mind-bloom-spark-staging.netlify.app"
+netlify env:set VITE_APP_URL "https://mind-boom-spark-staging.netlify.app"
 ```
 
 ### Step 4: Deploy
@@ -204,7 +204,7 @@ docker build \
   --build-arg VITE_SUPABASE_URL="https://aoumioacfvttagverbna.supabase.co" \
   --build-arg VITE_SUPABASE_ANON_KEY="your-anon-key" \
   --build-arg VITE_APP_ENV="staging" \
-  -t mind-bloom-spark:staging \
+  -t mind-boom-spark:staging \
   .
 ```
 
@@ -216,7 +216,7 @@ docker run -d \
   --name mindboom-staging \
   -p 8080:80 \
   --restart unless-stopped \
-  mind-bloom-spark:staging
+  mind-boom-spark:staging
 
 # Check container health
 docker ps
@@ -300,7 +300,7 @@ export default defineConfig({
 
 ```bash
 # Get staging URL (from deployment output)
-STAGING_URL="https://mind-bloom-spark-staging.vercel.app"
+STAGING_URL="https://mind-boom-spark-staging.vercel.app"
 
 # Test homepage
 curl -I $STAGING_URL
@@ -313,7 +313,7 @@ curl $STAGING_URL/health.json
 
 ### Step 2: Test Application
 
-Open in browser: `https://mind-bloom-spark-staging.vercel.app`
+Open in browser: `https://mind-boom-spark-staging.vercel.app`
 
 Test:
 - [ ] Homepage loads
@@ -327,8 +327,8 @@ Test:
 1. Go to: https://supabase.com/dashboard/project/aoumioacfvttagverbna
 2. Navigate to: **Authentication → URL Configuration**
 3. Add:
-   - **Site URL**: `https://mind-bloom-spark-staging.vercel.app`
-   - **Redirect URLs**: `https://mind-bloom-spark-staging.vercel.app/**`
+   - **Site URL**: `https://mind-boom-spark-staging.vercel.app`
+   - **Redirect URLs**: `https://mind-boom-spark-staging.vercel.app/**`
 
 ### Step 4: Test Full Flow
 
@@ -357,7 +357,7 @@ The repository already has `.github/workflows/deploy-staging.yml` configured.
 **To enable**:
 1. Add GitHub secrets (see SECRETS_CONFIGURATION_GUIDE.md)
 2. Push to `develop` branch
-3. Monitor: https://github.com/Samdekian/mind-bloom-spark/actions
+3. Monitor: https://github.com/Samdekian/mind-boom-spark/actions
 
 ## Performance Optimization
 
@@ -414,7 +414,7 @@ netlify rollback
 docker stop mindboom-staging
 
 # Run previous image
-docker run -d --name mindboom-staging mind-bloom-spark:previous-tag
+docker run -d --name mindboom-staging mind-boom-spark:previous-tag
 ```
 
 ## Troubleshooting
@@ -484,5 +484,5 @@ vercel --prod
 
 **Last Updated**: 2025-10-27  
 **Environment**: Staging  
-**Project**: mind-bloom-spark
+**Project**: mind-boom-spark
 
