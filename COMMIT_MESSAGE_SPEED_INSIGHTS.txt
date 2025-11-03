@@ -1,0 +1,28 @@
+feat: Add Vercel Speed Insights for Real User Monitoring
+
+Implemented @vercel/speed-insights to monitor Core Web Vitals and real user performance metrics.
+
+Changes:
+- Added @vercel/speed-insights@^1.2.0 dependency
+- Integrated SpeedInsights component in App.tsx
+- Created comprehensive documentation (VERCEL_SPEED_INSIGHTS.md)
+- Updated README.md with Performance Monitoring section
+- All tests passing (type-check, build, lint)
+
+Benefits:
+- Real-time monitoring of LCP, FID/INP, CLS, TTFB
+- Device and geographic performance segmentation
+- Performance regression detection
+- HIPAA compliant (no PHI collected)
+
+Bundle Impact:
+- Size: ~1.5 KB gzipped (minimal)
+- Non-blocking async loading
+- Zero configuration required
+
+Documentation:
+- See VERCEL_SPEED_INSIGHTS.md for detailed info
+- See SPEED_INSIGHTS_IMPLEMENTATION.md for implementation summary
+
+Ready for production deployment.
+
