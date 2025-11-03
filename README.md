@@ -43,6 +43,7 @@ MindBoom 3.0 - Twilio is a comprehensive video therapy platform designed for men
 ### 📊 Analytics & Monitoring
 - **Session Analytics**: Real-time quality metrics and statistics
 - **Performance Dashboard**: System health and performance monitoring
+- **Vercel Speed Insights**: Real User Monitoring (RUM) for Core Web Vitals
 - **Connection Quality**: Network diagnostics and optimization
 - **Usage Reports**: Detailed analytics for administrators
 
@@ -339,6 +340,17 @@ npm run test:coverage
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## Performance Monitoring
+
+MindBloom uses **Vercel Speed Insights** to monitor real user performance metrics:
+
+- **Core Web Vitals**: LCP, FID/INP, CLS, TTFB
+- **Real User Monitoring (RUM)**: Actual user experience data
+- **Device Segmentation**: Desktop, mobile, and tablet performance
+- **Geographic Analysis**: Performance by region/country
+
+For detailed information, see [VERCEL_SPEED_INSIGHTS.md](VERCEL_SPEED_INSIGHTS.md)
 
 ## Architecture
 
