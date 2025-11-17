@@ -274,7 +274,8 @@ export class BreakoutRoomManager {
     const assignments: Array<{
       breakout_room_id: string;
       participant_id: string;
-      session_id: string;
+      user_id: string | null;
+      participant_name: string;
       is_active: boolean;
     }> = [];
     
@@ -283,7 +284,8 @@ export class BreakoutRoomManager {
       assignments.push({
         breakout_room_id: rooms[roomIndex].id,
         participant_id: participant.id,
-        session_id: this.sessionId,
+        user_id: participant.user_id || null,
+        participant_name: participant.participant_name || 'Unknown',
         is_active: true
       });
     });
