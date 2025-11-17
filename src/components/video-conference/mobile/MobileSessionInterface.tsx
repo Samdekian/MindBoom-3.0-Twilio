@@ -31,6 +31,7 @@ import MobileConnectionGuide from "../components/MobileConnectionGuide";
 interface MobileSessionInterfaceProps {
   localVideoRef: React.RefObject<HTMLVideoElement>;
   remoteVideoRef: React.RefObject<HTMLVideoElement>;
+  remoteStreams?: MediaStream[];
   isVideoEnabled: boolean;
   isAudioEnabled: boolean;
   isScreenSharing: boolean;
@@ -56,6 +57,7 @@ interface MobileSessionInterfaceProps {
 const MobileSessionInterface: React.FC<MobileSessionInterfaceProps> = ({
   localVideoRef,
   remoteVideoRef,
+  remoteStreams = [],
   isVideoEnabled,
   isAudioEnabled,
   isScreenSharing,
@@ -87,6 +89,27 @@ const MobileSessionInterface: React.FC<MobileSessionInterfaceProps> = ({
       } = useUnifiedPermissionHandler();
   const { deviceState, enumerateDevices, testDevice, requestPermissions: requestDevicePermissions } = useEnhancedDeviceManager();
   const { validateStream, validateVideoElement } = useStreamValidator();
+
+  // Assign first remote stream to video ref when streams change
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStreams.length > 0) {
+      const firstStream = remoteStreams[0];
+      if (remoteVideoRef.current.srcObject !== firstStream) {
+        console.log('📱 [MobileSessionInterface] Assigning stream to video element:', firstStream.id);
+        remoteVideoRef.current.srcObject = firstStream;
+        
+        // Ensure video plays
+        remoteVideoRef.current.play().catch(err => {
+          console.warn('⚠️ [MobileSessionInterface] Video autoplay blocked:', err);
+          remoteVideoRef.current.muted = true;
+          remoteVideoRef.current.play().catch(e => console.error('❌ [MobileSessionInterface] Failed to play even when muted:', e));
+        });
+      }
+    } else if (remoteVideoRef.current && remoteStreams.length === 0 && remoteVideoRef.current.srcObject) {
+      console.log('📱 [MobileSessionInterface] Clearing video element - no streams');
+      remoteVideoRef.current.srcObject = null;
+    }
+  }, [remoteStreams, remoteVideoRef]);
 
   // Enhanced connection recovery
   const { 
@@ -398,38 +421,100 @@ const MobileSessionInterface: React.FC<MobileSessionInterfaceProps> = ({
           </div>
         )}
 
-        {sessionStatus === 'connected' ? (
-          <div className="h-full flex items-center justify-center">
-            {/* Remote video */}
-            <video
-              ref={remoteVideoRef}
-              className="w-full h-full object-cover"
-              autoPlay
-              playsInline
-              muted={false}
-            />
-            
-            {/* Local video - picture in picture */}
-            <div className="absolute top-4 right-4 w-24 h-32 bg-gray-800 rounded-lg overflow-hidden">
-              <video
-                ref={localVideoRef}
-                className="w-full h-full object-cover"
-                autoPlay
-                playsInline
-                muted
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-white text-center">
-              <div className="animate-pulse w-32 h-32 bg-gray-700 rounded-full flex items-center justify-center mb-4 mx-auto">
-                <Video className="h-16 w-16 text-gray-400" />
+        <div className="h-full flex flex-col p-2 gap-2 overflow-y-auto">
+          {/* Multi-participant grid */}
+          {sessionStatus === 'connected' ? (
+            <>
+              {/* Remote participants grid */}
+              <div className={cn(
+                "flex-1 gap-2",
+                remoteStreams.length === 0 ? "flex items-center justify-center" :
+                remoteStreams.length === 1 ? "grid grid-cols-1" :
+                "grid grid-cols-2"
+              )}>
+                {remoteStreams.length > 0 ? (
+                  remoteStreams.map((stream, index) => (
+                    <div key={stream.id} className="relative bg-gray-800 rounded-lg overflow-hidden min-h-[200px]">
+                      <video
+                        ref={(el) => {
+                          if (el && el.srcObject !== stream) {
+                            el.srcObject = stream;
+                            el.play().catch(err => {
+                              console.warn('⚠️ [Mobile] Video autoplay blocked:', err);
+                              el.muted = true;
+                              el.play().catch(e => console.error('❌ [Mobile] Failed to play even when muted:', e));
+                            });
+                          }
+                        }}
+                        autoPlay
+                        playsInline
+                        muted={false}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                        Participant {index + 1}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-white/60">
+                    <Users className="h-12 w-12 mb-2 opacity-50" />
+                    <p className="text-sm">Waiting for participants...</p>
+                  </div>
+                )}
               </div>
-              <p className="text-lg">Connecting...</p>
+              
+              {/* Local video - bottom bar */}
+              <div className="h-32 bg-gray-900 rounded-lg overflow-hidden relative flex-shrink-0">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                  You {isTherapist ? '(Therapist)' : '(Patient)'}
+                </div>
+                {!isVideoEnabled && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                    <VideoOff className="h-8 w-8 text-white/50" />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              {/* Hidden video elements for refs */}
+              <video ref={remoteVideoRef} style={{ display: 'none' }} />
+              <div style={{ display: 'none' }}>
+                <video ref={localVideoRef} />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+          
+          {/* Connecting state overlay */}
+          {sessionStatus !== 'connected' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+              <div className="text-white text-center">
+                <div className="animate-pulse w-32 h-32 bg-gray-700 rounded-full flex items-center justify-center mb-4 mx-auto">
+                  <Video className="h-16 w-16 text-gray-400" />
+                </div>
+                <p className="text-lg">Connecting...</p>
+              </div>
+            </div>
+          )}
+          
+          {/* No remote streams message */}
+          {sessionStatus === 'connected' && remoteStreams.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+              <div className="text-white text-center">
+                <Users className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg">Waiting for participants...</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Controls */}

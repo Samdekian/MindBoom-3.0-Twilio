@@ -35,44 +35,27 @@ npm install -g vercel
 vercel login
 ```
 
-### Step 3: Configure Project
+### Step 3: Link to the Correct Vercel Project
 
-Create `vercel.json` in project root:
+> **Important (Updated 2025-10-29):** The staging environment now lives on the project  
+> [`samdekians-projects/mind-boom-3-0-twilio`](https://vercel.com/samdekians-projects/mind-boom-3-0-twilio).  
+> The previous staging host (`mind-bloom-therapy-hkhoioeet…`) is deprecated and should not receive new deployments.
 
-```json
-{
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
-  "framework": "vite",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=31536000; includeSubDomains"
-        }
-      ]
-    }
-  ]
-}
+Use the CLI to link the repository to the staging project:
+
+```bash
+vercel link --project mind-boom-3-0-twilio
 ```
+
+This command creates a `.vercel` directory with the correct project association so that `vercel` and `vercel --prod` target the new staging host.  
+If you previously linked to the deprecated project, delete the old `.vercel` directory first.
+
+#### Environment Targets
+- **Staging (Preview / Manual QA):** `mind-boom-3-0-twilio` (switch completed on 2025-10-29)  
+- **Production:** Connect the production project in the Vercel dashboard and run `vercel --prod` from the same repository (recommended to keep staging and production as separate Vercel projects).
+
+#### Hardening Recommendation
+Archive or delete the legacy project (`mind-bloom-therapy-hkhoioeet…`) in the Vercel dashboard to prevent accidental deployments or webhook noise.
 
 ### Step 4: Set Environment Variables
 

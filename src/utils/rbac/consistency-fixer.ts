@@ -16,7 +16,7 @@ export const fixUserDataInconsistency = async (
     // Call the sync_user_roles RPC function
     const { data, error } = await supabase.rpc(
       "sync_user_roles", 
-      { user_id: userId }
+      { p_user_id: userId }
     );
     
     if (error) {

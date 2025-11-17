@@ -54,3 +54,6 @@ WHERE routine_name = 'get_user_roles';
 -- Login agora deve ser ~10x mais rápido! 🚀
 -- ============================================================================
 
+
+
+

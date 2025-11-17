@@ -109,7 +109,7 @@ export async function syncUserRoles(userId: string): Promise<boolean> {
   try {
     // Call the database function to sync user metadata with roles
     const { data, error } = await supabase.rpc('sync_user_roles', { 
-      user_id: userId  // Keep as user_id - this is what the sync_user_roles function expects
+      p_user_id: userId  // Use p_user_id - this is what the sync_user_roles function expects
     });
     
     if (error) throw error;

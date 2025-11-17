@@ -28,7 +28,7 @@ const SessionParticipantMonitor: React.FC<SessionParticipantMonitorProps> = ({
     return null;
   }
 
-  const waitingParticipants = participants.filter(p => p.role === 'participant' && p.is_active);
+  const waitingParticipants = Array.isArray(participants) ? participants.filter(p => p?.role === 'participant' && p?.is_active) : [];
 
   if (loading) {
     return (

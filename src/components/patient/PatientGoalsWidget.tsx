@@ -7,7 +7,8 @@ import { usePatientGoals } from "@/hooks/use-patient-goals";
 import { useAuthRBAC } from "@/contexts/AuthRBACContext";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import { GoalsSetupWizard } from "./onboarding/GoalsSetupWizard";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { format } from "date-fns";
 
 const PatientGoalsWidget = () => {
@@ -115,6 +116,11 @@ const PatientGoalsWidget = () => {
       {/* Goals Setup Modal */}
       <Dialog open={showGoalsSetup} onOpenChange={setShowGoalsSetup}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <VisuallyHidden>
+            <DialogHeader>
+              <DialogTitle>Goals Setup</DialogTitle>
+            </DialogHeader>
+          </VisuallyHidden>
           <GoalsSetupWizard />
         </DialogContent>
       </Dialog>

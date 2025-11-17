@@ -253,7 +253,7 @@ mindboom-3.0-twilio/
 ### Staging Resources
 
 - **Supabase Project**: `aoumioacfvttagverbna`
-- **Repository**: https://github.com/Samdekian/mind-boom-spark
+- **Repository**: https://github.com/Samdekian/MindBoom-3.0-Twilio
 
 ### Staging Setup Guides
 
@@ -378,7 +378,7 @@ UNLICENSED - This is proprietary software. See [LICENSE](LICENSE) file for detai
 For support and questions:
 
 - Documentation: [docs/](docs/)
-- Issues: [GitHub Issues](https://github.com/Samdekian/mind-boom-spark/issues)
+- Issues: [GitHub Issues](https://github.com/Samdekian/MindBoom-3.0-Twilio/issues)
 - Email: support@mindboom.com
 
 ## Acknowledgments

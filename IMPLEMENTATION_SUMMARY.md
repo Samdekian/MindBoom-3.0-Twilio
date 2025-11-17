@@ -16,9 +16,9 @@ Supabase Staging: aoumioacfvttagverbna
 - ✅ Histórico Git limpo criado
 - ✅ Branch `main` criado e enviado
 - ✅ Branch `develop` criado e enviado
-- ✅ Remote configurado: `git@github.com:Samdekian/mind-boom-spark.git`
+- ✅ Remote configurado: `git@github.com:Samdekian/MindBoom-3.0-Twilio.git`
 - ✅ SSH autenticação configurada
-- ✅ Todas as referências atualizadas para `mind-boom-spark`
+- ✅ Todas as referências atualizadas para `MindBoom-3.0-Twilio`
 
 **Commits criados**: 6
 **Arquivos no repositório**: ~1,540

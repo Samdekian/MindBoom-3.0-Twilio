@@ -28,7 +28,10 @@ export class BreakoutRoomManager {
   /**
    * Setup realtime subscription for breakout room updates
    */
-  private setupRealtimeSubscription(): void {
+  private async setupRealtimeSubscription(): Promise<void> {
+    // Get breakout room IDs for this session to filter participant updates
+    const roomIds = await this.getSessionBreakoutRoomIds();
+    
     this.realtimeChannel = supabase
       .channel(`breakout-rooms-${this.sessionId}`)
       .on(
@@ -49,7 +52,9 @@ export class BreakoutRoomManager {
         {
           event: '*',
           schema: 'public',
-          table: 'breakout_room_participants'
+          table: 'breakout_room_participants',
+          // Filter to only this session's breakout rooms
+          filter: roomIds.length > 0 ? `breakout_room_id=in.(${roomIds})` : `breakout_room_id=eq.00000000-0000-0000-0000-000000000000`
         },
         (payload) => {
           console.log('🔄 [BreakoutManager] Participant update:', payload);
@@ -57,6 +62,23 @@ export class BreakoutRoomManager {
         }
       )
       .subscribe();
+  }
+
+  /**
+   * Get breakout room IDs for this session
+   */
+  private async getSessionBreakoutRoomIds(): Promise<string> {
+    try {
+      const { data: rooms } = await supabase
+        .from('breakout_rooms')
+        .select('id')
+        .eq('session_id', this.sessionId);
+      
+      return rooms?.map(r => r.id).join(',') || '';
+    } catch (error) {
+      console.error('❌ [BreakoutManager] Failed to get room IDs:', error);
+      return '';
+    }
   }
 
   /**
@@ -154,16 +176,79 @@ export class BreakoutRoomManager {
    * Create a single breakout room
    */
   private async createSingleRoom(request: CreateBreakoutRoomRequest): Promise<BreakoutRoom> {
-    // Call edge function to create room in Twilio and database
-    const { data, error } = await supabase.functions.invoke('create-breakout-room', {
-      body: request
-    });
+    try {
+      console.log('🏗️ [BreakoutManager] Creating room:', {
+        session_id: request.session_id,
+        room_name: request.room_name,
+        max_participants: request.max_participants
+      });
+      
+      // Call edge function to create room in Twilio and database
+      const { data, error } = await supabase.functions.invoke('create-breakout-room', {
+        body: request
+      });
 
-    if (error || !data.success) {
-      throw new Error(data?.error || 'Failed to create breakout room');
+      if (error) {
+        console.error('❌ [BreakoutManager] Edge function error:', error);
+        
+        // FunctionsHttpError has limited information available synchronously
+        // The actual error message is in the Response body which we can't easily access here
+        let errorMessage = error.message || 'Edge function failed';
+        
+        // If the error has a context property that's a Response, log it
+        if (error.context && typeof error.context === 'object') {
+          console.error('❌ [BreakoutManager] Error context (Response object):', {
+            status: (error.context as any).status,
+            statusText: (error.context as any).statusText,
+            type: (error.context as any).type,
+            url: (error.context as any).url
+          });
+          
+          // Include status in error message if available
+          const status = (error.context as any).status;
+          if (status) {
+            errorMessage = `Edge function failed with status ${status}: ${errorMessage}`;
+          }
+        }
+        
+        // Check for common network errors
+        if (error.message?.includes('NetworkError') || error.message?.includes('fetch')) {
+          errorMessage = 'Network error: Unable to connect to server. Please check your internet connection and try again.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      if (!data) {
+        console.error('❌ [BreakoutManager] No data returned from edge function');
+        throw new Error('No data returned from edge function');
+      }
+
+      if (!data.success) {
+        console.error('❌ [BreakoutManager] Edge function returned failure:', {
+          success: data.success,
+          error: data.error,
+          data: data
+        });
+        throw new Error(data.error || 'Failed to create breakout room');
+      }
+
+      if (!data.breakout_room) {
+        console.error('❌ [BreakoutManager] No breakout_room in response:', data);
+        throw new Error('Invalid response from edge function: missing breakout_room');
+      }
+
+      console.log('✅ [BreakoutManager] Room created successfully:', data.breakout_room.id);
+      return data.breakout_room;
+    } catch (error) {
+      console.error('❌ [BreakoutManager] createSingleRoom failed:', {
+        error,
+        request,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
     }
-
-    return data.breakout_room;
   }
 
   /**
@@ -173,33 +258,82 @@ export class BreakoutRoomManager {
     participants: any[],
     rooms: BreakoutRoom[]
   ): Promise<void> {
+    console.log('🎯 [BreakoutManager] Auto-assigning participants:', {
+      participantCount: participants.length,
+      roomCount: rooms.length
+    });
+    
+    if (participants.length === 0) {
+      console.log('⚠️ [BreakoutManager] No participants to assign');
+      return;
+    }
+    
     // Shuffle participants for random distribution
     const shuffled = [...participants].sort(() => Math.random() - 0.5);
     
-    const assignments: Array<{ participant_id: string; breakout_room_id: string }> = [];
+    const assignments: Array<{
+      breakout_room_id: string;
+      participant_id: string;
+      session_id: string;
+      is_active: boolean;
+    }> = [];
     
     shuffled.forEach((participant, index) => {
       const roomIndex = index % rooms.length;
       assignments.push({
+        breakout_room_id: rooms[roomIndex].id,
         participant_id: participant.id,
-        breakout_room_id: rooms[roomIndex].id
+        session_id: this.sessionId,
+        is_active: true
       });
     });
 
-    // Bulk assign
-    const { data, error } = await supabase.functions.invoke('bulk-assign-participants', {
-      body: {
-        session_id: this.sessionId,
-        assignments,
-        transition_type: 'auto'
-      }
-    });
+    console.log('📝 [BreakoutManager] Assignments to create:', assignments.length);
 
-    if (error || !data.success) {
-      throw new Error('Failed to assign participants');
+    // Bulk insert assignments directly into database
+    const { data, error } = await supabase
+      .from('breakout_room_participants')
+      .insert(assignments)
+      .select();
+
+    if (error) {
+      console.error('❌ [BreakoutManager] Failed to insert assignments:', error);
+      throw new Error('Failed to assign participants: ' + error.message);
     }
 
-    console.log('✅ [BreakoutManager] Auto-assigned participants:', data.assigned_count);
+    console.log('✅ [BreakoutManager] Auto-assigned participants:', data?.length || 0);
+    
+    // Update room participant counts
+    await this.updateRoomParticipantCounts(rooms.map(r => r.id));
+  }
+
+  /**
+   * Update participant counts for rooms
+   */
+  private async updateRoomParticipantCounts(roomIds: string[]): Promise<void> {
+    try {
+      for (const roomId of roomIds) {
+        // Count active participants
+        const { count, error } = await supabase
+          .from('breakout_room_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('breakout_room_id', roomId)
+          .eq('is_active', true);
+
+        if (error) {
+          console.error('❌ [BreakoutManager] Failed to count participants for room:', roomId, error);
+          continue;
+        }
+
+        // Update room count
+        await supabase
+          .from('breakout_rooms')
+          .update({ current_participants: count || 0 })
+          .eq('id', roomId);
+      }
+    } catch (error) {
+      console.error('❌ [BreakoutManager] Failed to update room counts:', error);
+    }
   }
 
   /**

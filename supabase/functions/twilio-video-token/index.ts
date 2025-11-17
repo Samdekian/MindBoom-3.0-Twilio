@@ -70,7 +70,7 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const { identity, roomName }: TokenRequest = await req.json();
+    let { identity, roomName }: TokenRequest = await req.json();
 
     if (!identity || !roomName) {
       return new Response(
@@ -80,6 +80,52 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
+    }
+
+    // Verify user is therapist for this session
+    const { data: session, error: sessionError } = await supabase
+      .from('instant_sessions')
+      .select('therapist_id, host_user_id')
+      .or(`session_token.eq.${roomName},id.eq.${roomName}`)
+      .single();
+
+    if (sessionError || !session) {
+      console.error("❌ [twilio-video-token] Session not found:", sessionError);
+      return new Response(
+        JSON.stringify({ error: 'Session not found' }),
+        { 
+          status: 404, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Only therapist can generate tokens for their sessions
+    const isTherapist = session.therapist_id === user.id || session.host_user_id === user.id;
+
+    if (!isTherapist) {
+      console.error("❌ [twilio-video-token] User not authorized for session");
+      return new Response(
+        JSON.stringify({ error: 'Not authorized to join this session' }),
+        { 
+          status: 403, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Enforce identity matches user's profile or email
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .single();
+
+    const expectedIdentity = profile?.full_name || user.email?.split('@')[0] || user.id;
+
+    if (identity !== expectedIdentity) {
+      console.warn("⚠️ [twilio-video-token] Identity mismatch, using expected identity");
+      identity = expectedIdentity;
     }
 
     console.log(`🎥 [twilio-video-token] Generating token for user: ${identity}, room: ${roomName}`);

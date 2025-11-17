@@ -10,6 +10,9 @@ import QuickStatsBar from "@/components/patient/QuickStatsBar";
 import ResourcesWidget from "@/components/dashboard/ResourcesWidget";
 import PatientGoalsWidget from "@/components/patient/PatientGoalsWidget";
 import LiveActivityFeed from "@/components/dashboard/LiveActivityFeed";
+import MobileHeader from "@/components/patient/MobileHeader";
+import MobileBottomNav from "@/components/patient/MobileBottomNav";
+import MobileDrawer from "@/components/patient/MobileDrawer";
 import { useMigrationTracking } from "@/utils/migration/migration-helpers";
 import { useRealTimeUpdates } from "@/hooks/use-realtime-updates";
 import { useAuthRBAC } from "@/contexts/AuthRBACContext";
@@ -21,6 +24,7 @@ const PatientDashboardContent = () => {
   const { user } = useAuthRBAC();
   const { state } = useOnboarding();
   const [showOnboardingFlow, setShowOnboardingFlow] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   
   // Track migration
   useMigrationTracking('PatientDashboard', 'useAuthRBAC');
@@ -36,14 +40,34 @@ const PatientDashboardContent = () => {
     setShowOnboardingFlow(false);
   };
 
+  const handleOpenMobileDrawer = () => {
+    setIsMobileDrawerOpen(true);
+  };
+
+  const handleCloseMobileDrawer = () => {
+    setIsMobileDrawerOpen(false);
+  };
+
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <PatientSidebar />
+      <div className="min-h-screen flex w-full bg-gray-50">
+        {/* Desktop Sidebar - hidden on mobile */}
+        <div className="hidden lg:block">
+          <PatientSidebar />
+        </div>
         
-        <main className="flex-1 overflow-auto">
-          <div className="p-6 space-y-6">
-            <DashboardHeader />
+        {/* Mobile Header - visible only on mobile */}
+        <div className="lg:hidden w-full">
+          <MobileHeader onMenuClick={handleOpenMobileDrawer} />
+        </div>
+        
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto w-full">
+          <div className="p-4 pb-20 lg:p-6 lg:pb-6 space-y-4 lg:space-y-6 max-w-7xl mx-auto">
+            {/* Desktop Header - hidden on mobile */}
+            <div className="hidden lg:block">
+              <DashboardHeader />
+            </div>
             
             {/* Show onboarding banner if not complete */}
             {!state.isOnboardingComplete ? (
@@ -54,7 +78,7 @@ const PatientDashboardContent = () => {
             
             <QuickStatsBar />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
               <div className="lg:col-span-2">
                 <UpcomingAppointments />
               </div>
@@ -63,7 +87,7 @@ const PatientDashboardContent = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
               <div>
                 <PatientGoalsWidget />
               </div>
@@ -72,7 +96,7 @@ const PatientDashboardContent = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
               <div>
                 <LiveActivityFeed />
               </div>
@@ -83,6 +107,15 @@ const PatientDashboardContent = () => {
           </div>
         </main>
       </div>
+      
+      {/* Mobile Bottom Navigation - visible only on mobile */}
+      <MobileBottomNav onMoreClick={handleOpenMobileDrawer} />
+      
+      {/* Mobile Drawer Menu */}
+      <MobileDrawer 
+        isOpen={isMobileDrawerOpen}
+        onClose={handleCloseMobileDrawer}
+      />
       
       {/* Onboarding Flow Modal */}
       <OnboardingFlow 

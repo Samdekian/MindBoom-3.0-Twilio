@@ -1,4 +1,4 @@
-# MindBoom Spark - Staging Quick Start Guide
+# MindBoom 3.0 - Twilio - Staging Quick Start Guide
 
 Get your staging environment up and running in minutes!
 
@@ -7,7 +7,7 @@ Get your staging environment up and running in minutes!
 ```bash
 # 1. Clone repository (when available)
 git clone https://github.com/samdekian/MindBoom-3.0-Twilio.git
-cd mind-boom-spark
+cd MindBoom-3.0-Twilio
 
 # 2. Run automated setup
 ./scripts/setup-staging.sh
@@ -31,7 +31,7 @@ vercel --prod
 
 ```bash
 git clone https://github.com/samdekian/MindBoom-3.0-Twilio.git
-cd mind-boom-spark
+cd MindBoom-3.0-Twilio
 ```
 
 ### 2. Install Dependencies

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Link, useLocation } from "react-router-dom";
 import { useAuthRBAC } from "@/contexts/AuthRBACContext";
@@ -18,6 +18,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useTheme } from "@/hooks/useTheme";
 import { User, Calendar, Shield, Moon, Sun, LogOut, Home, BookOpen, MessageSquare, FileText, Clock, Globe } from "lucide-react";
 import { useMigrationTracking } from "@/utils/migration/migration-helpers";
+import MobileHeader from "@/components/patient/MobileHeader";
+import MobileBottomNav from "@/components/patient/MobileBottomNav";
+import MobileDrawer from "@/components/patient/MobileDrawer";
 
 interface PatientLayoutProps {
   children: React.ReactNode;
@@ -30,6 +33,7 @@ const PatientLayout = ({ children, title, description }: PatientLayoutProps) => 
   const { user, signOut } = useAuthRBAC();
   const { patientInquiries } = usePatientInquiries();
   const { theme, toggleTheme } = useTheme();
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
   // Track migration
   useMigrationTracking('PatientLayout', 'useAuthRBAC');
@@ -57,8 +61,13 @@ const PatientLayout = ({ children, title, description }: PatientLayoutProps) => 
         {description && <meta name="description" content={description} />}
       </Helmet>
       
-      {/* Top Navigation */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      {/* Mobile Header - visible only on mobile */}
+      <div className="lg:hidden">
+        <MobileHeader onMenuClick={() => setIsMobileDrawerOpen(true)} />
+      </div>
+      
+      {/* Desktop Top Navigation - hidden on mobile */}
+      <nav className="hidden lg:block bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Left - Logo */}
@@ -193,9 +202,18 @@ const PatientLayout = ({ children, title, description }: PatientLayoutProps) => 
       </nav>
       
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 pb-20 pt-4 sm:px-6 lg:px-8 lg:py-6 lg:pb-6">
         {children}
       </main>
+      
+      {/* Mobile Bottom Navigation - visible only on mobile */}
+      <MobileBottomNav onMoreClick={() => setIsMobileDrawerOpen(true)} />
+      
+      {/* Mobile Drawer Menu */}
+      <MobileDrawer 
+        isOpen={isMobileDrawerOpen}
+        onClose={() => setIsMobileDrawerOpen(false)}
+      />
     </div>
   );
 };

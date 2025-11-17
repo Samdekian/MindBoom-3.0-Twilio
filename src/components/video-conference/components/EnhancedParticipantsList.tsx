@@ -116,7 +116,7 @@ const EnhancedParticipantsList: React.FC<EnhancedParticipantsListProps> = ({
     }
   };
 
-  const activeParticipants = participants.filter(p => p.is_active);
+  const activeParticipants = Array.isArray(participants) ? participants.filter(p => p?.is_active) : [];
   const isSessionFull = activeParticipants.length >= maxParticipants;
 
   const formatDuration = (joinedAt: string) => {

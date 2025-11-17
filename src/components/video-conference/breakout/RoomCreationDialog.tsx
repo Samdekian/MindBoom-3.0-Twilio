@@ -123,6 +123,13 @@ const RoomCreationDialog: React.FC<RoomCreationDialogProps> = ({
           <div className="text-sm text-muted-foreground">
             {participantCount} {participantCount === 1 ? 'participant' : 'participants'} in session
           </div>
+          {participantCount < 2 && (
+            <Alert variant="default" className="border-amber-200 bg-amber-50 text-amber-700">
+              <AlertDescription>
+                Invite at least one more participant before creating breakout rooms.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Number of Rooms */}
           <div className="space-y-2">
