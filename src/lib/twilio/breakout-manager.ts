@@ -276,7 +276,6 @@ export class BreakoutRoomManager {
       participant_id: string;
       user_id: string | null;
       participant_name: string;
-      is_active: boolean;
     }> = [];
     
     shuffled.forEach((participant, index) => {
@@ -285,37 +284,40 @@ export class BreakoutRoomManager {
         breakout_room_id: rooms[roomIndex].id,
         participant_id: participant.id,
         user_id: participant.user_id || null,
-        participant_name: participant.participant_name || 'Unknown',
-        is_active: true
+        participant_name: participant.participant_name || 'Unknown'
       });
     });
 
     console.log('📝 [BreakoutManager] Assignments to create:', assignments.length);
 
-    // Bulk insert assignments directly into database
-    const { data, error } = await supabase
-      .from('breakout_room_participants')
-      .insert(assignments)
-      .select();
+    // Use edge function to assign participants (bypasses RLS)
+    const { data, error } = await supabase.functions.invoke('assign-breakout-participants', {
+      body: {
+        session_id: this.sessionId,
+        assignments
+      }
+    });
 
     if (error) {
-      console.error('❌ [BreakoutManager] Failed to insert assignments:', error);
-      throw new Error('Failed to assign participants: ' + error.message);
+      console.error('❌ [BreakoutManager] Edge function error:', error);
+      throw new Error('Failed to assign participants: ' + (error.message || 'Unknown error'));
     }
 
-    console.log('✅ [BreakoutManager] Auto-assigned participants:', data?.length || 0);
-    
-    // Update room participant counts
-    await this.updateRoomParticipantCounts(rooms.map(r => r.id));
+    if (!data || !data.success) {
+      console.error('❌ [BreakoutManager] Assignment failed:', data);
+      throw new Error(data?.error || 'Failed to assign participants');
+    }
+
+    console.log('✅ [BreakoutManager] Auto-assigned participants:', data.assigned_count || 0);
   }
 
   /**
    * Update participant counts for rooms
    */
   private async updateRoomParticipantCounts(roomIds: string[]): Promise<void> {
+    // This is now handled by the edge function, but keeping for backwards compatibility
     try {
       for (const roomId of roomIds) {
-        // Count active participants
         const { count, error } = await supabase
           .from('breakout_room_participants')
           .select('*', { count: 'exact', head: true })
@@ -327,7 +329,6 @@ export class BreakoutRoomManager {
           continue;
         }
 
-        // Update room count
         await supabase
           .from('breakout_rooms')
           .update({ current_participants: count || 0 })

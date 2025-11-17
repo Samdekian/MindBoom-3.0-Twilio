@@ -112,47 +112,102 @@ serve(async (req) => {
 
     if (!twilioResponse.ok) {
       const errorText = await twilioResponse.text();
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { message: errorText };
+      }
+      
       console.error("❌ [create-breakout-room] Twilio API error:", errorText);
       
-      // Check if room already exists
-      if (twilioResponse.status === 409) {
+      // Check if room already exists (HTTP 400 with code 53113 or HTTP 409)
+      if (twilioResponse.status === 409 || (twilioResponse.status === 400 && errorData.code === 53113)) {
         console.log("ℹ️ [create-breakout-room] Room already exists, fetching existing room");
-        // Fetch existing room
-        const getRoomResponse = await fetch(`${twilioUrl}/${twilioRoomName}`, {
+        
+        // First check if database record already exists
+        const { data: existingDbRoom } = await supabase
+          .from('breakout_rooms')
+          .select('*')
+          .eq('session_id', session_id)
+          .eq('room_name', room_name)
+          .eq('is_active', true)
+          .maybeSingle();
+        
+        if (existingDbRoom) {
+          // Room already exists in DB, return it
+          console.log("✅ [create-breakout-room] Found existing database record");
+          return new Response(
+            JSON.stringify({
+              success: true,
+              breakout_room: existingDbRoom,
+              twilio_room_sid: existingDbRoom.twilio_room_sid
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Fetch existing room by UniqueName from Twilio
+        const getRoomResponse = await fetch(`${twilioUrl}?UniqueName=${encodeURIComponent(twilioRoomName)}`, {
           headers: {
             'Authorization': `Basic ${authHeaderTwilio}`,
           }
         });
         
         if (getRoomResponse.ok) {
-          const existingRoom = await getRoomResponse.json();
-          const twilioRoomSid = existingRoom.sid;
+          const roomsData = await getRoomResponse.json();
+          const existingRoom = roomsData.rooms?.[0];
           
-          // Create database record
-          const { data: breakoutRoom, error: dbError } = await supabase
-            .from('breakout_rooms')
-            .insert({
-              session_id,
-              room_name,
-              twilio_room_sid: twilioRoomSid,
-              max_participants,
-              created_by: user.id
-            })
-            .select()
-            .single();
+          if (existingRoom) {
+            const twilioRoomSid = existingRoom.sid;
+            
+            // Create database record for existing Twilio room
+            const { data: breakoutRoom, error: dbError } = await supabase
+              .from('breakout_rooms')
+              .insert({
+                session_id,
+                room_name,
+                twilio_room_sid: twilioRoomSid,
+                max_participants,
+                created_by: user.id
+              })
+              .select()
+              .single();
 
-          if (dbError) {
-            throw new Error(`Database error: ${dbError.message}`);
+            if (dbError) {
+              console.error("❌ [create-breakout-room] Database error:", dbError);
+              // If it's a duplicate key error, try to fetch the existing record
+              if (dbError.code === '23505') {
+                const { data: existingRoom } = await supabase
+                  .from('breakout_rooms')
+                  .select('*')
+                  .eq('session_id', session_id)
+                  .eq('room_name', room_name)
+                  .maybeSingle();
+                
+                if (existingRoom) {
+                  return new Response(
+                    JSON.stringify({
+                      success: true,
+                      breakout_room: existingRoom,
+                      twilio_room_sid: twilioRoomSid
+                    }),
+                    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                  );
+                }
+              }
+              throw new Error(`Database error: ${dbError.message}`);
+            }
+
+            return new Response(
+              JSON.stringify({
+                success: true,
+                breakout_room: breakoutRoom,
+                twilio_room_sid: twilioRoomSid
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
           }
-
-          return new Response(
-            JSON.stringify({
-              success: true,
-              breakout_room: breakoutRoom,
-              twilio_room_sid: twilioRoomSid
-            }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
         }
       }
       
