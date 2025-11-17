@@ -32,7 +32,7 @@ export interface InquiryResponse {
 export const usePatientInquiries = () => {
   const { user } = useAuthRBAC();
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ["patient-inquiries", user?.id],
     queryFn: async (): Promise<PatientInquiry[]> => {
       if (!user?.id) throw new Error("User not authenticated");
@@ -61,6 +61,11 @@ export const usePatientInquiries = () => {
     },
     enabled: !!user?.id,
   });
+
+  return {
+    ...query,
+    patientInquiries: query.data ?? [],
+  };
 };
 
 export const useInquiryResponses = (inquiryId: string) => {

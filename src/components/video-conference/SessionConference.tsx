@@ -43,7 +43,14 @@ const SessionConference: React.FC<SessionConferenceProps> = ({
     joinSession,
     leaveSession,
     connectionState,
-    reconnectSession
+    reconnectSession,
+    localVideoRef,
+    remoteVideoRef,
+    remoteStreams,
+    toggleVideo,
+    toggleAudio,
+    toggleScreenSharing,
+    toggleRecording
   } = useVideoSession();
 
   const [showPreparation, setShowPreparation] = React.useState(
@@ -85,6 +92,22 @@ const SessionConference: React.FC<SessionConferenceProps> = ({
   
   // Show share button for therapists in instant sessions
   const showShareButton = sessionType === 'instant' && isTherapist;
+
+  const handleToggleVideoControl = React.useCallback(() => {
+    toggleVideo?.().catch(err => console.error('[SessionConference] Failed to toggle video', err));
+  }, [toggleVideo]);
+
+  const handleToggleAudioControl = React.useCallback(() => {
+    toggleAudio?.().catch(err => console.error('[SessionConference] Failed to toggle audio', err));
+  }, [toggleAudio]);
+
+  const handleToggleScreenShareControl = React.useCallback(() => {
+    toggleScreenSharing?.().catch(err => console.error('[SessionConference] Screen share toggle failed', err));
+  }, [toggleScreenSharing]);
+
+  const handleToggleRecordingControl = React.useCallback(() => {
+    toggleRecording?.().catch(err => console.error('[SessionConference] Recording toggle failed', err));
+  }, [toggleRecording]);
 
   const handleJoinSession = async () => {
     console.log('🎯 [SessionConference] handleJoinSession called', {
@@ -161,8 +184,9 @@ const SessionConference: React.FC<SessionConferenceProps> = ({
   if (isMobile) {
     return (
       <MobileSessionInterface
-        localVideoRef={React.createRef()}
-        remoteVideoRef={React.createRef()}
+        localVideoRef={localVideoRef}
+        remoteVideoRef={remoteVideoRef}
+        remoteStreams={remoteStreams}
         isVideoEnabled={videoState.isVideoEnabled}
         isAudioEnabled={videoState.isAudioEnabled}
         isScreenSharing={videoState.isScreenSharing}
@@ -172,10 +196,10 @@ const SessionConference: React.FC<SessionConferenceProps> = ({
         sessionStatus={sessionStatus}
         participantName={participantName}
         sessionDuration={sessionDuration ? parseInt(sessionDuration.split(':')[0]) * 60 + parseInt(sessionDuration.split(':')[1]) : 0}
-        onToggleVideo={() => {}}
-        onToggleAudio={() => {}}
-        onToggleScreenShare={() => {}}
-        onToggleRecording={() => {}}
+        onToggleVideo={handleToggleVideoControl}
+        onToggleAudio={handleToggleAudioControl}
+        onToggleScreenShare={handleToggleScreenShareControl}
+        onToggleRecording={handleToggleRecordingControl}
         onToggleChat={() => {}}
         onJoinSession={handleJoinSession}
         onLeaveSession={leaveSession}

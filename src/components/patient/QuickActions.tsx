@@ -44,19 +44,21 @@ const QuickActions = () => {
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 md:gap-4">
             {actions.map(({ id, label, icon: Icon, color, onClick }) => (
               <Button
                 key={id}
                 onClick={onClick}
-                className={`${color} text-white p-4 h-auto flex flex-col items-center space-y-2`}
+                className={`${color} text-white p-4 md:p-6 h-auto min-h-[100px] md:min-h-[120px] flex flex-col items-center justify-center gap-3 transition-transform active:scale-95 hover:shadow-lg`}
               >
-                <Icon className="h-5 w-5" />
-                <span className="text-sm font-medium">{label}</span>
+                <Icon className="h-7 w-7 md:h-8 md:w-8" />
+                <span className="text-sm md:text-base font-medium text-center leading-tight">
+                  {label}
+                </span>
               </Button>
             ))}
           </div>

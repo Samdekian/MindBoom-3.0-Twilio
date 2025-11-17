@@ -145,31 +145,29 @@ export const OnboardingTherapistDirectory = () => {
                 selectedTherapistId === therapist.id ? 'ring-2 ring-primary' : ''
               }`}
             >
-              <CardContent className="p-6">
-                <div className="flex items-start gap-6">
-                  <Avatar className="h-20 w-20">
+              <CardContent className="p-4 md:p-6">
+                <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+                  <Avatar className="h-16 w-16 sm:h-20 sm:w-20 shrink-0">
                     <AvatarImage src={therapist.avatar_url || undefined} alt={therapist.full_name || 'Therapist'} />
                     <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-lg">
                       {therapist.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'T'}
                     </AvatarFallback>
                   </Avatar>
                   
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-xl font-semibold text-gray-900">
-                          {therapist.full_name || 'Therapist'}
-                        </h3>
-                        {therapist.location && (
-                          <div className="flex items-center gap-1 text-sm text-gray-600 mt-1">
-                            <MapPin className="h-4 w-4" />
-                            <span>{therapist.location}</span>
-                          </div>
-                        )}
-                      </div>
+                  <div className="flex-1 min-w-0 w-full">
+                    <div className="mb-3">
+                      <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+                        {therapist.full_name || 'Therapist'}
+                      </h3>
+                      {therapist.location && (
+                        <div className="flex items-center gap-1 text-sm text-gray-600 mt-1">
+                          <MapPin className="h-4 w-4" />
+                          <span>{therapist.location}</span>
+                        </div>
+                      )}
                     </div>
 
-                    <p className="text-gray-600 mb-4 line-clamp-3">
+                    <p className="text-sm sm:text-base text-gray-600 mb-4 line-clamp-3">
                       {therapist.bio || "Experienced therapist dedicated to helping clients achieve their mental health goals."}
                     </p>
 
@@ -195,7 +193,7 @@ export const OnboardingTherapistDirectory = () => {
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex items-center gap-4 text-sm text-gray-600">
                         {therapist.years_experience && (
                           <div className="flex items-center gap-1">
@@ -205,11 +203,12 @@ export const OnboardingTherapistDirectory = () => {
                         )}
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {/* TODO: View profile */}}
+                          className="w-full sm:w-auto min-w-[120px]"
                         >
                           <User className="h-4 w-4 mr-2" />
                           Learn More
@@ -218,27 +217,31 @@ export const OnboardingTherapistDirectory = () => {
                           size="sm"
                           onClick={() => handleSelectTherapist(therapist.id)}
                           disabled={selectTherapistMutation.isPending}
-                          className="flex items-center gap-2"
+                          className="flex items-center justify-center gap-2 w-full sm:w-auto min-w-[160px]"
                         >
                           {selectedTherapistId === therapist.id ? (
                             <CheckCircle className="h-4 w-4" />
                           ) : (
                             <Heart className="h-4 w-4" />
                           )}
-                          {selectTherapistMutation.isPending && selectedTherapistId === therapist.id
-                            ? 'Selecting...'
-                            : selectedTherapistId === therapist.id
-                            ? 'Selected'
-                            : 'Choose This Therapist'
-                          }
+                          <span className="whitespace-nowrap">
+                            {selectTherapistMutation.isPending && selectedTherapistId === therapist.id
+                              ? 'Selecting...'
+                              : selectedTherapistId === therapist.id
+                              ? 'Selected'
+                              : 'Choose This Therapist'
+                            }
+                          </span>
                         </Button>
                       </div>
                     </div>
 
                     {/* Why choose this therapist */}
                     <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                      <h4 className="text-sm font-medium text-blue-800 mb-1">Why this might be a good match:</h4>
-                      <p className="text-sm text-blue-700">
+                      <h4 className="text-xs sm:text-sm font-medium text-blue-800 mb-1">
+                        Why this might be a good match:
+                      </h4>
+                      <p className="text-xs sm:text-sm text-blue-700">
                         {therapist.specializations && therapist.specializations.length > 0
                           ? `Specializes in ${therapist.specializations.slice(0, 2).join(' and ')}`
                           : 'Experienced in general therapy approaches'

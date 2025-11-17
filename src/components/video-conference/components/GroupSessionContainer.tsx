@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -10,6 +10,10 @@ import { ConnectionStatus } from './ConnectionStatus';
 import ConnectionStatusOverlay from './ConnectionStatusOverlay';
 import { useEnhancedDeviceManager } from '@/hooks/video-conference/use-enhanced-device-manager';
 import { SessionControls } from './SessionControls';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import ParticipantsList from './ParticipantsList';
+import { useInstantSessionParticipants, type InstantSessionParticipant } from '@/hooks/video-conference/use-instant-session-participants';
+import BreakoutRoomManager from '../breakout/BreakoutRoomManager';
 
 interface GroupSessionContainerProps {
   sessionId: string;
@@ -41,11 +45,66 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     remoteStreams,
     sessionStatus,
     cameraStatus,
-    participants
+    participants,
+    connectedPeers
   } = useVideoSession();
 
   // Enhanced device manager for better device detection and status
   const { deviceState } = useEnhancedDeviceManager();
+
+  // Participants management
+  const { 
+    participants: sessionParticipantsRaw, 
+    removeParticipant 
+  } = useInstantSessionParticipants(sessionId);
+
+  type DisplayParticipant = InstantSessionParticipant & { isPlaceholder?: boolean };
+
+  const sessionParticipants = React.useMemo<InstantSessionParticipant[]>(
+    () => Array.isArray(sessionParticipantsRaw) ? sessionParticipantsRaw : [],
+    [sessionParticipantsRaw]
+  );
+
+  const placeholderParticipants = React.useMemo<DisplayParticipant[]>(() => {
+    if (!connectedPeers || connectedPeers.length === 0) {
+      return [];
+    }
+
+    const connectedIds = new Set(connectedPeers.filter(Boolean));
+    const existingIds = new Set(sessionParticipants.map(p => p.user_id).filter(Boolean));
+    const missingIds = Array.from(connectedIds).filter(id => !existingIds.has(id));
+
+    return missingIds.map((peerId, index) => ({
+      id: `peer-${peerId}-${index}`,
+      session_id: sessionId,
+      user_id: peerId,
+      participant_name: `Participant ${sessionParticipants.length + index + 1}`,
+      role: 'participant',
+      joined_at: new Date().toISOString(),
+      left_at: null,
+      is_active: true,
+      isPlaceholder: true
+    }));
+  }, [connectedPeers, sessionParticipants, sessionId]);
+
+  const displayParticipants = React.useMemo<DisplayParticipant[]>(
+    () => [...sessionParticipants, ...placeholderParticipants],
+    [sessionParticipants, placeholderParticipants]
+  );
+
+  // Create refs for each remote video stream
+  const remoteVideoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+
+  // Update video elements when remote streams change
+  useEffect(() => {
+    remoteStreams.forEach((stream) => {
+      const videoElement = remoteVideoRefs.current.get(stream.id);
+      if (videoElement && videoElement.srcObject !== stream) {
+        console.log('🎥 [GroupSessionContainer] Attaching stream', stream.id, 'to video element');
+        videoElement.srcObject = stream;
+      }
+    });
+  }, [remoteStreams]);
 
   // Create device status for overlay
   const getDeviceStatus = () => {
@@ -81,7 +140,7 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     };
   };
 
-  // Debug logging on component mount
+  // Debug logging on component mount (only log on initial mount and sessionId change)
   React.useEffect(() => {
     console.log('🔍 [GroupSessionContainer] Component mounted with:', {
       sessionId,
@@ -93,7 +152,7 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
       participantCount: participants?.length || 0,
       joinSessionAvailable: typeof joinSession
     });
-  }, [sessionId, sessionType, connectionState, cameraStatus, isInSession, isTherapist, participants, joinSession]);
+  }, [sessionId]); // Only re-run if sessionId changes to prevent excessive re-renders
 
   const [isJoining, setIsJoining] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -161,6 +220,8 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
 
   // Show session interface when connected
   if (isInSession) {
+    const activeParticipantCount = displayParticipants.filter(p => p?.is_active).length;
+    
     return (
       <div className={cn("h-full flex flex-col", className)}>
         {/* Session Header */}
@@ -177,22 +238,81 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
               <span className="text-xs text-destructive">Camera access denied</span>
             )}
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleLeaveSession}
-          >
-            Leave Session
-          </Button>
+          
+          <div className="flex items-center gap-2">
+            {/* Participants Drawer */}
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Users className="h-4 w-4" />
+                  <span className="hidden sm:inline">Participants</span>
+                  <span className="inline sm:hidden">{activeParticipantCount}</span>
+                  <span className="hidden sm:inline">({activeParticipantCount})</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+                <SheetHeader className="mb-6">
+                  <SheetTitle className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-white" />
+                    </div>
+                    Session Participants
+                  </SheetTitle>
+                  <SheetDescription>
+                    View and manage participants in this session
+                  </SheetDescription>
+                </SheetHeader>
+                
+                {/* Breakout Room Manager - Therapist only */}
+                {isTherapist && (
+                  <div className="mb-6">
+                    <BreakoutRoomManager
+                      sessionId={sessionId}
+                      isTherapist={isTherapist}
+                    />
+                  </div>
+                )}
+                
+        {displayParticipants.length > 0 ? (
+                  <ParticipantsList
+            participants={displayParticipants}
+                    isTherapist={isTherapist}
+                    currentUserId={therapistInfo?.id || patientInfo?.id}
+                    onRemoveParticipant={removeParticipant}
+                    maxParticipants={10}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Users className="h-12 w-12 mb-4 opacity-30" />
+                    <p className="text-sm">No participants data available</p>
+                  </div>
+                )}
+              </SheetContent>
+            </Sheet>
+
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleLeaveSession}
+            >
+              Leave Session
+            </Button>
+          </div>
         </div>
 
 
         {/* Video Grid Area */}
-        <div className="flex-1 bg-slate-50 p-4">
-          <div className="h-full grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex-1 bg-slate-50 p-4 overflow-y-auto">
+          <div className={cn(
+            "h-full gap-4",
+            remoteStreams.length === 0 ? "grid grid-cols-1 md:grid-cols-2" :
+            remoteStreams.length === 1 ? "grid grid-cols-1 md:grid-cols-2" :
+            remoteStreams.length === 2 ? "grid grid-cols-1 md:grid-cols-3" :
+            "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+          )}>
             {/* Local Video */}
-            <Card className="relative overflow-hidden">
-              <CardContent className="p-0 h-full min-h-[200px] bg-slate-900 flex items-center justify-center">
+            <Card className="relative overflow-hidden h-full min-h-[200px]">
+              <CardContent className="p-0 h-full bg-slate-900 flex items-center justify-center">
                 {videoState.isVideoEnabled ? (
                   <video 
                     ref={localVideoRef}
@@ -204,10 +324,10 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
                 ) : (
                   <div className="text-white flex flex-col items-center gap-2">
                     <VideoOff className="h-8 w-8" />
-                    <span>Video Off</span>
+                    <span className="text-sm">Video Off</span>
                   </div>
                 )}
-                <div className="absolute bottom-2 left-2 text-xs text-white bg-black/50 px-2 py-1 rounded">
+                <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
                   You {isTherapist ? '(Therapist)' : '(Patient)'}
                 </div>
                 <div className="absolute top-2 right-2 flex gap-1">
@@ -217,60 +337,75 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
               </CardContent>
             </Card>
 
-            {/* Remote Video / Participants */}
-            <Card className="relative overflow-hidden">
-              <CardContent className="p-0 h-full min-h-[200px] bg-slate-800 flex items-center justify-center">
-                {(() => {
-                  console.log('🎬 [GroupSessionContainer] Rendering remote video area:', {
-                    remoteStreamsLength: remoteStreams.length,
-                    remoteStreamIds: remoteStreams.map(s => s.id),
-                    hasRemoteVideoRef: !!remoteVideoRef.current,
-                    remoteVideoRefSrcObject: remoteVideoRef.current?.srcObject ? 'SET' : 'NOT SET'
-                  });
-                  return remoteStreams.length > 0 ? (
-                    <video 
-                      ref={remoteVideoRef}
-                      autoPlay
-                      playsInline
-                      muted={false}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="text-white flex flex-col items-center gap-2">
-                      <Users className="h-8 w-8" />
-                      <span>Waiting for other participants...</span>
-                      <div className="text-xs opacity-70 text-center">
-                        {connectionState === 'CONNECTING' && 'Establishing connection...'}
-                        {connectionState === 'CONNECTED' && remoteStreams.length === 0 && 'Connected - waiting for remote video'}
-                        {connectionState === 'FAILED' && 'Connection failed - check your internet'}
-                        {connectionState === 'DISCONNECTED' && 'Connection lost - attempting to reconnect'}
-                        {connectionState === 'IDLE' && 'Ready to connect'}
+            {/* Remote Video Participants */}
+            {remoteStreams.length > 0 ? (
+              remoteStreams.map((stream, index) => {
+                console.log('🎬 [GroupSessionContainer] Rendering remote stream:', {
+                  streamId: stream.id,
+                  streamIndex: index,
+                  streamActive: stream.active
+                });
+                
+                return (
+                  <Card key={stream.id} className="relative overflow-hidden h-full min-h-[200px]">
+                    <CardContent className="p-0 h-full bg-slate-800 flex items-center justify-center">
+                      <video
+                        ref={(el) => {
+                          if (el) {
+                            remoteVideoRefs.current.set(stream.id, el);
+                            // Immediately attach the stream if it's not already attached
+                            if (el.srcObject !== stream) {
+                              el.srcObject = stream;
+                            }
+                          }
+                        }}
+                        autoPlay
+                        playsInline
+                        muted={false}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                        Participant {index + 1}
                       </div>
-                      {connectionState === 'CONNECTED' && (
-                        <div className="text-xs opacity-50 mt-2">
-                          Remote streams: {remoteStreams.length}
-                        </div>
-                      )}
+                      <div className="absolute top-2 right-2">
+                        <div className={cn(
+                          "h-2 w-2 rounded-full",
+                          stream.active ? "bg-green-400" : "bg-red-400"
+                        )} />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            ) : (
+              <Card className="relative overflow-hidden h-full min-h-[200px]">
+                <CardContent className="p-0 h-full bg-slate-800 flex items-center justify-center">
+                  <div className="text-white flex flex-col items-center gap-2 p-4">
+                    <Users className="h-8 w-8" />
+                    <span className="text-sm font-medium">Waiting for participants...</span>
+                    <div className="text-xs opacity-70 text-center">
+                      {connectionState === 'CONNECTING' && 'Establishing connection...'}
+                      {connectionState === 'CONNECTED' && remoteStreams.length === 0 && 'Connected - waiting for others to join'}
+                      {connectionState === 'FAILED' && 'Connection failed - check your internet'}
+                      {connectionState === 'DISCONNECTED' && 'Connection lost - attempting to reconnect'}
+                      {connectionState === 'IDLE' && 'Ready to connect'}
                     </div>
-                  );
-                })()}
-                <div className="absolute bottom-2 left-2 text-xs text-white bg-black/50 px-2 py-1 rounded">
-                  Remote Participant {remoteStreams.length > 0 ? '(Active)' : '(Waiting)'}
-                </div>
-                {connectionState === 'FAILED' && (
-                  <div className="absolute top-2 right-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      onClick={reconnectSession}
-                      className="text-xs text-white border-white/20 hover:bg-white/10"
-                    >
-                      Retry
-                    </Button>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  {connectionState === 'FAILED' && (
+                    <div className="absolute top-2 right-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={reconnectSession}
+                        className="text-xs text-white border-white/20 hover:bg-white/10"
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
 

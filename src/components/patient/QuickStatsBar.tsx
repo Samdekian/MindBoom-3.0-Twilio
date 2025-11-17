@@ -11,13 +11,13 @@ const QuickStatsBar = () => {
     return (
       <Card className="mb-6">
         <CardContent className="py-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="flex items-center gap-2 animate-pulse">
-                <div className="h-8 w-8 bg-muted rounded"></div>
-                <div className="space-y-1">
-                  <div className="h-4 bg-muted rounded w-16"></div>
-                  <div className="h-3 bg-muted rounded w-12"></div>
+              <div key={i} className="flex items-center gap-3 animate-pulse p-3 rounded-lg bg-muted/50">
+                <div className="h-12 w-12 bg-muted rounded-full"></div>
+                <div className="space-y-2 flex-1">
+                  <div className="h-5 bg-muted rounded w-12"></div>
+                  <div className="h-3 bg-muted rounded w-16"></div>
                 </div>
               </div>
             ))}
@@ -63,16 +63,22 @@ const QuickStatsBar = () => {
   return (
     <Card className="mb-6">
       <CardContent className="py-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {quickStats.map((stat, index) => (
-            <div key={index} className="flex items-center gap-3 flex-1 min-w-0">
-              <Badge variant="secondary" className={`${stat.color} h-10 w-10 rounded-full flex items-center justify-center p-0`}>
-                <stat.icon className="h-4 w-4" />
+            <div 
+              key={index} 
+              className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-br from-gray-50 to-white border border-gray-100 hover:shadow-sm transition-shadow"
+            >
+              <Badge 
+                variant="secondary" 
+                className={`${stat.color} h-12 w-12 rounded-full flex items-center justify-center p-0 shrink-0`}
+              >
+                <stat.icon className="h-5 w-5" />
               </Badge>
-              <div className="min-w-0">
-                <div className="text-lg font-semibold">{stat.value}</div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {stat.label} {stat.subtext}
+              <div className="flex-1 min-w-0">
+                <div className="text-base md:text-lg font-bold">{stat.value}</div>
+                <div className="text-xs text-muted-foreground">
+                  {stat.label}
                 </div>
               </div>
             </div>

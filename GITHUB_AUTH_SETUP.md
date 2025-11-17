@@ -82,7 +82,7 @@ cat ~/.ssh/id_ed25519.pub
 
 ```bash
 # Atualizar remote para usar SSH
-git remote set-url origin git@github.com:Samdekian/mind-boom-spark.git
+git remote set-url origin git@github.com:Samdekian/MindBoom-3.0-Twilio.git
 
 # Fazer push
 git push -u origin main

@@ -51,7 +51,7 @@ const StreamOptimizedVideoGrid: React.FC<StreamOptimizedVideoGridProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [visibleParticipants, setVisibleParticipants] = useState<Set<string>>(new Set());
 
-  const activeParticipants = participants.filter(p => p.connectionQuality !== 'disconnected');
+  const activeParticipants = Array.isArray(participants) ? participants.filter(p => p?.connectionQuality !== 'disconnected') : [];
   const participantCount = activeParticipants.length;
 
   // Determine which participants should be prioritized for high quality

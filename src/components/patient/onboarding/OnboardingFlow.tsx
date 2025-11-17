@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { OnboardingTherapistDirectory } from '@/components/booking/OnboardingTherapistDirectory';
 import { OnboardingScheduleModal } from '@/components/booking/OnboardingScheduleModal';
@@ -99,6 +100,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({ isOpen, onClose 
     <>
       <Dialog open={isOpen && !showScheduleModal} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <VisuallyHidden>
+            <DialogHeader>
+              <DialogTitle>Onboarding Flow</DialogTitle>
+            </DialogHeader>
+          </VisuallyHidden>
           {renderCurrentStep()}
         </DialogContent>
       </Dialog>

@@ -7,10 +7,8 @@
 
 ## 🔄 Mudança de Repositório
 
-### ❌ Repositório Antigo
-```
-https://github.com/Samdekian/mind-boom-spark
-```
+### ❌ Repositório Antigo (arquivado)
+O repositório legado foi arquivado e permanece disponível apenas para consulta interna.
 
 ### ✅ Repositório Novo (Atual)
 ```
@@ -100,9 +98,9 @@ commit 32abe27
 Author: MindBoom Team
 Date: Wed Oct 29 2025
 
-refactor: update repository from mind-boom-spark to MindBoom-3.0-Twilio
+refactor: update repository from legacy repo to MindBoom-3.0-Twilio
 
-- Updated repository URL from Samdekian/mind-boom-spark to Samdekian/MindBoom-3.0-Twilio
+- Updated repository URL from the legacy repo to Samdekian/MindBoom-3.0-Twilio
 - Changed project name to mindboom-3.0-twilio in package.json
 - Updated all documentation references
 - Updated Docker labels

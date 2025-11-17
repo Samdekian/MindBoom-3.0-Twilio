@@ -203,7 +203,7 @@ export async function ensureUserHasValidRole(userId: string): Promise<boolean> {
     if (insertError) throw insertError;
     
     // Sync the user's roles to ensure consistency
-    await supabase.rpc('sync_user_roles', { user_id: userId });
+    await supabase.rpc('sync_user_roles', { p_user_id: userId });
     
     return true;
   } catch (error) {

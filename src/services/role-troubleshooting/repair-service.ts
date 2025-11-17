@@ -11,7 +11,7 @@ export const repairRoleConsistency = async (userId: string): Promise<{
 }> => {
   try {
     const { data, error } = await supabase
-      .rpc('sync_user_roles', { user_id: userId });
+      .rpc('sync_user_roles', { p_user_id: userId });
       
     if (error) throw error;
     
@@ -41,7 +41,7 @@ export const handleRoleManualUpdate = async (
     // For this simple version, we just trigger role sync
     // In a real implementation, you would have UI to select roles
     const { error } = await supabase
-      .rpc('sync_user_roles', { user_id: userId });
+      .rpc('sync_user_roles', { p_user_id: userId });
       
     if (error) throw error;
     

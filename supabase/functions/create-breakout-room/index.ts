@@ -103,9 +103,10 @@ serve(async (req) => {
       body: new URLSearchParams({
         'UniqueName': twilioRoomName,
         'Type': 'group', // Group room supports up to 50 participants
-        'MaxParticipants': max_participants.toString(),
-        'StatusCallback': `${supabaseUrl}/functions/v1/twilio-room-status`,
-        'StatusCallbackMethod': 'POST'
+        'MaxParticipants': max_participants.toString()
+        // StatusCallback removed until twilio-room-status endpoint is implemented
+        // 'StatusCallback': `${supabaseUrl}/functions/v1/twilio-room-status`,
+        // 'StatusCallbackMethod': 'POST'
       }).toString()
     });
 
@@ -213,10 +214,18 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("❌ [create-breakout-room] Function error:", error);
+    console.error("❌ [create-breakout-room] Error stack:", error instanceof Error ? error.stack : 'No stack trace');
+    console.error("❌ [create-breakout-room] Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : typeof error,
+      cause: error instanceof Error ? error.cause : undefined
+    });
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Internal server error'
+        error: error instanceof Error ? error.message : 'Internal server error',
+        details: error instanceof Error ? error.name : String(error)
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

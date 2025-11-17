@@ -85,7 +85,7 @@ jobs:
       
       - name: Upload health check logs as artifacts
         if: always()  # Upload logs even if checks fail
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: health-check-logs-${{ github.run_number }}
           path: ./health-logs
@@ -94,7 +94,7 @@ jobs:
       # New security logs artifact upload
       - name: Upload security check logs as artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: security-check-logs-${{ github.run_number }}
           path: ./security-logs

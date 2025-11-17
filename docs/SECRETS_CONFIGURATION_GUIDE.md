@@ -354,5 +354,5 @@ For issues with secrets configuration:
 
 **Last Updated**: 2025-10-27  
 **Environment**: Staging  
-**Project**: mind-boom-spark
+**Project**: mind-boom-3-0-twilio
 

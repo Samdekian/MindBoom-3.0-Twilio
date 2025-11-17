@@ -11,12 +11,14 @@ import AdminRoutes from '@/routes/AdminRoutes';
 import VideoConferencePage from '@/pages/VideoConferencePage';
 import InstantSessionJoin from '@/pages/InstantSessionJoin';
 import SessionPage from '@/pages/SessionPage';
+import ChatPage from '@/pages/ChatPage';
 
 const AppRoutes = () => {
   return (
     <Routes>
       {/* Public routes */}
       <Route path="/" element={<Index />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route path="/login" element={<SecureAuth />} />
       <Route path="/register" element={<SecureAuth />} />
       <Route path="/auth" element={<SecureAuth />} />

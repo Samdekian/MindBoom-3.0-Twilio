@@ -49,7 +49,7 @@ export const useRoleSync = () => {
 
       // Then sync metadata
       const { data: syncData, error: syncError } = await supabase.rpc('sync_user_roles', {
-        user_id: user.id
+        p_user_id: user.id
       });
 
       if (syncError) {

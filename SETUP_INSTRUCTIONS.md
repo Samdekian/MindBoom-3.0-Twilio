@@ -1,8 +1,8 @@
-# MindBoom Spark - Complete Setup Instructions
+# MindBoom 3.0 - Twilio - Complete Setup Instructions
 
 ## 🎯 Current Status
 
-✅ **Repository prepared** for: `mind-boom-spark`  
+✅ **Repository prepared** for: `MindBoom-3.0-Twilio`  
 ✅ **Supabase staging ready**: Project `aoumioacfvttagverbna`  
 ✅ **All documentation created**  
 ✅ **Scripts automated**  
@@ -18,8 +18,8 @@ Before you can push the code, you need to create the repository on GitHub:
 
 2. **Configure**:
    - **Owner**: Samdekian
-   - **Repository name**: `mind-boom-spark`
-   - **Description**: `MindBoom Spark - AI-powered video therapy platform with Twilio Video, breakout rooms, and OpenAI integration`
+   - **Repository name**: `MindBoom-3.0-Twilio`
+   - **Description**: `MindBoom 3.0 - Twilio - AI-powered video therapy platform with Twilio Video, breakout rooms, and OpenAI integration`
    - **Visibility**: 
      - 🔒 **Private** (recommended for initial setup)
      - OR 🌍 **Public** (if you want open source)
@@ -43,7 +43,7 @@ Before you can push the code, you need to create the repository on GitHub:
 - Fresh git history created
 - Initial commit with all code
 - Branches: `main` and `develop`
-- Remote configured to: `mind-boom-spark`
+- Remote configured to: `MindBoom-3.0-Twilio`
 - All references updated to correct repository name
 
 ### ✅ Documentation Created (9 new files)
@@ -58,7 +58,7 @@ Before you can push the code, you need to create the repository on GitHub:
 9. **README.md** - Updated with staging section
 
 ### ✅ Configurations
-- Package.json updated (name: `mind-boom-spark`)
+- Package.json updated (name: `mindboom-3.0-twilio`)
 - Build script added: `npm run build:staging`
 - Docker configuration ready
 - CI/CD workflows configured
@@ -137,8 +137,8 @@ netlify login
 netlify deploy --prod
 
 # Option C: Docker
-docker build -t mind-boom-spark:staging .
-docker run -d -p 8080:80 mind-boom-spark:staging
+docker build -t mind-boom-3-0-twilio:staging .
+docker run -d -p 8080:80 mind-boom-3-0-twilio:staging
 ```
 
 ### 7. Validate Deployment
@@ -255,5 +255,5 @@ Once all steps are complete, your staging environment will be fully operational!
 **Last Updated**: 2025-10-27  
 **Version**: 3.0.0  
 **Environment**: Staging  
-**Project**: mind-boom-spark
+**Project**: mind-boom-3-0-twilio
 

@@ -18,7 +18,7 @@ const Hero = () => {
               {t("heroSubtitle")}
             </p>
             <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 pt-4">
-              <Link to="/ai-chat">
+              <Link to="/chat">
                 <Button className="w-full sm:w-auto bg-therapy-purple hover:bg-therapy-deep-purple text-white text-lg py-6 px-8">
                   {t("tryAiNow")}
                 </Button>

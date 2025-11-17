@@ -58,17 +58,26 @@ export class ICEServerManager {
   }
 
   private getDefaultConfig(): ICEServerConfig {
-    const iceServers: RTCIceServer[] = [...STUN_SERVERS];
+    // Limit to 2 STUN and 2 TURN servers maximum (Twilio recommendation)
+    const iceServers: RTCIceServer[] = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' }
+    ];
     
-    // Add TURN servers if credentials are available
+    // Add only primary TURN servers if credentials available
     if (this.turnCredentials) {
-      TURN_SERVERS.forEach(server => {
-        iceServers.push({
-          urls: server.urls,
-          username: this.turnCredentials!.username,
-          credential: this.turnCredentials!.credential
-        });
-      });
+      iceServers.push(
+        {
+          urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+          username: this.turnCredentials.username,
+          credential: this.turnCredentials.credential
+        },
+        {
+          urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
+          username: this.turnCredentials.username,
+          credential: this.turnCredentials.credential
+        }
+      );
     }
 
     return {

@@ -37,6 +37,7 @@ export interface VideoSessionContextType {
   remoteVideoRef: React.RefObject<HTMLVideoElement>;
   localStream: MediaStream | null;
   remoteStreams: MediaStream[];
+  connectedPeers: string[];
   
   // Session controls
   joinSession: () => Promise<void>;
@@ -119,6 +120,15 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
   // Track connection attempts and timeouts
   const [connectionAttempts, setConnectionAttempts] = useState<Map<string, number>>(new Map());
   const [connectionTimeouts, setConnectionTimeouts] = useState<Map<string, NodeJS.Timeout>>(new Map());
+  
+  // Queue for ICE candidates that arrive before remote description is set
+  const iceCandidateQueues = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  
+  // Track processed remote streams to prevent duplicates
+  const processedStreamIds = useRef<Set<string>>(new Set());
+  
+  // Track processed answers to prevent duplicates
+  const processedAnswers = useRef<Set<string>>(new Set());
   
   // Video refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -218,52 +228,80 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
       remoteStreamIds: remoteStreams.map(s => s.id)
     });
     
-    if (remoteVideoRef.current && remoteStreams.length > 0) {
-      const remoteStream = remoteStreams[0];
-      
-      // Only update if the stream actually changed
-      if (previousRemoteStreamRef.current !== remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
-      previousRemoteStreamRef.current = remoteStream;
-      
-      // Wait for loadedmetadata before playing to prevent interruption
-      const videoElement = remoteVideoRef.current;
-      const playWhenReady = () => {
-        videoElement.play().catch(err => {
-          console.warn('⚠️ [VideoSession] Video autoplay blocked:', err);
-          // Try playing muted if autoplay blocked
-          videoElement.muted = true;
-          videoElement.play().catch(e => console.error('❌ [VideoSession] Failed to play even when muted:', e));
-        });
-      };
-      
-      if (videoElement.readyState >= 2) {
-        // Metadata already loaded
-        playWhenReady();
-      } else {
-        // Wait for metadata to load
-        videoElement.addEventListener('loadedmetadata', playWhenReady, { once: true });
+    // Retry mechanism for mobile - ref might not be ready immediately
+    const assignStream = () => {
+      if (remoteVideoRef.current && remoteStreams.length > 0) {
+        const remoteStream = remoteStreams[0];
+        
+        // Only update if the stream actually changed
+        if (previousRemoteStreamRef.current !== remoteStream) {
+          remoteVideoRef.current.srcObject = remoteStream;
+          previousRemoteStreamRef.current = remoteStream;
+          
+          // Wait for loadedmetadata before playing to prevent interruption
+          const videoElement = remoteVideoRef.current;
+          const playWhenReady = () => {
+            videoElement.play().catch(err => {
+              console.warn('⚠️ [VideoSession] Video autoplay blocked:', err);
+              // Try playing muted if autoplay blocked
+              videoElement.muted = true;
+              videoElement.play().catch(e => console.error('❌ [VideoSession] Failed to play even when muted:', e));
+            });
+          };
+          
+          if (videoElement.readyState >= 2) {
+            // Metadata already loaded
+            playWhenReady();
+          } else {
+            // Wait for metadata to load
+            videoElement.addEventListener('loadedmetadata', playWhenReady, { once: true });
+          }
+          
+          console.log('✅ [VideoSession] Remote stream assigned to video element:', {
+            streamId: remoteStream.id,
+            videoTracks: remoteStream.getVideoTracks().length,
+            audioTracks: remoteStream.getAudioTracks().length,
+            videoElement: remoteVideoRef.current.tagName,
+            srcObjectSet: !!remoteVideoRef.current.srcObject,
+            videoTrackEnabled: remoteStream.getVideoTracks()[0]?.enabled,
+            videoTrackReadyState: remoteStream.getVideoTracks()[0]?.readyState,
+            videoElementPaused: remoteVideoRef.current.paused,
+            videoElementReadyState: remoteVideoRef.current.readyState
+          });
+          return true;
+        } else {
+          console.log('⏭️ [VideoSession] Remote stream unchanged, skipping assignment');
+          return true; // Stream already assigned
+        }
       }
+      return false;
+    };
+    
+    // Try immediately
+    if (assignStream()) {
+      return;
+    }
+    
+    // If ref not ready, retry after a short delay (mobile mounting delay)
+    if (remoteStreams.length > 0 && !remoteVideoRef.current) {
+      console.log('⏳ [VideoSession] Ref not ready, retrying in 100ms...');
+      const retryTimer = setTimeout(() => {
+        if (assignStream()) {
+          console.log('✅ [VideoSession] Stream assigned on retry');
+        } else {
+          console.warn('⚠️ [VideoSession] Still cannot assign stream after retry');
+        }
+      }, 100);
       
-      console.log('✅ [VideoSession] Remote stream assigned to video element:', {
-        streamId: remoteStream.id,
-        videoTracks: remoteStream.getVideoTracks().length,
-        audioTracks: remoteStream.getAudioTracks().length,
-        videoElement: remoteVideoRef.current.tagName,
-        srcObjectSet: !!remoteVideoRef.current.srcObject,
-        videoTrackEnabled: remoteStream.getVideoTracks()[0]?.enabled,
-        videoTrackReadyState: remoteStream.getVideoTracks()[0]?.readyState,
-        videoElementPaused: remoteVideoRef.current.paused,
-        videoElementReadyState: remoteVideoRef.current.readyState
-      });
-      } else {
-        console.log('⏭️ [VideoSession] Remote stream unchanged, skipping assignment');
-      }
-    } else if (remoteVideoRef.current && remoteVideoRef.current.srcObject && previousRemoteStreamRef.current) {
+      return () => clearTimeout(retryTimer);
+    }
+    
+    // Clear stream if no streams available
+    if (remoteVideoRef.current && remoteVideoRef.current.srcObject && previousRemoteStreamRef.current && remoteStreams.length === 0) {
       remoteVideoRef.current.srcObject = null;
       previousRemoteStreamRef.current = null;
       console.log('🔄 [VideoSession] Remote video cleared - no streams available');
-    } else {
+    } else if (!remoteVideoRef.current && remoteStreams.length > 0) {
       console.log('⚠️ [VideoSession] Cannot assign remote stream:', {
         hasVideoRef: !!remoteVideoRef.current,
         remoteStreamsCount: remoteStreams.length
@@ -287,6 +325,12 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
   // Set connection timeout with automatic retry
   const setConnectionTimeout = useCallback((userId: string) => {
     clearConnectionTimeout(userId);
+    
+    // Scale timeout based on number of existing participants
+    const participantCount = peerConnections.size;
+    const timeoutDuration = 15000 + (participantCount * 5000); // 15s base + 5s per peer
+    
+    console.log(`⏱️ [VideoSession] Setting connection timeout for ${userId}: ${timeoutDuration}ms (${participantCount} existing peers)`);
     
     const timeout = setTimeout(() => {
       console.log('⏰ [VideoSession] Connection timeout for', userId, '- attempting retry');
@@ -313,7 +357,7 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
         console.error('❌ [VideoSession] Max connection attempts reached for', userId);
         setConnectionState('FAILED');
       }
-    }, 10000); // 10 second timeout
+    }, timeoutDuration);
     
     setConnectionTimeouts(prev => {
       const updated = new Map(prev);
@@ -349,24 +393,65 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
 
     const pc = new RTCPeerConnection(iceConfig);
 
-    // Handle remote stream
+    // Handle remote stream with duplicate prevention
     pc.ontrack = (event) => {
       console.log('📹 [VideoSession] Remote track received from', userId);
       const [remoteStream] = event.streams;
-      console.log('🔍 [VideoSession] Remote stream details:', {
-        streamId: remoteStream?.id,
-        hasStream: !!remoteStream,
-        trackCount: remoteStream?.getTracks().length || 0,
-        videoTracks: remoteStream?.getVideoTracks().length || 0,
-        audioTracks: remoteStream?.getAudioTracks().length || 0
-      });
-      setRemoteStreams(prev => {
-        console.log('🔄 [VideoSession] Updating remoteStreams state:', {
-          previousCount: prev.length,
-          previousIds: prev.map(s => s.id),
-          newStreamId: remoteStream?.id
+      
+      if (!remoteStream) {
+        console.warn('⚠️ [VideoSession] No stream in track event');
+        return;
+      }
+      
+      // Prevent duplicate stream processing
+      if (processedStreamIds.current.has(remoteStream.id)) {
+        console.log('🔄 [VideoSession] Stream already processed, skipping:', remoteStream.id);
+        return;
+      }
+      
+      processedStreamIds.current.add(remoteStream.id);
+      
+      // Monitor remote stream track states
+      remoteStream.getTracks().forEach(track => {
+        console.log(`📊 [VideoSession] Remote ${track.kind} track from ${userId}:`, {
+          id: track.id,
+          label: track.label,
+          readyState: track.readyState,
+          enabled: track.enabled,
+          muted: track.muted
         });
-        const filtered = prev.filter(stream => stream.id !== remoteStream.id);
+        
+        // Monitor remote track state changes
+        track.onended = () => {
+          console.warn(`⚠️ [VideoSession] Remote ${track.kind} track ended from ${userId}`);
+        };
+        
+        track.onmute = () => {
+          console.log(`🔇 [VideoSession] Remote ${track.kind} track muted from ${userId}`);
+        };
+        
+        track.onunmute = () => {
+          console.log(`🔊 [VideoSession] Remote ${track.kind} track unmuted from ${userId}`);
+        };
+      });
+      
+      console.log('🔍 [VideoSession] Remote stream details:', {
+        streamId: remoteStream.id,
+        userId: userId,
+        trackCount: remoteStream.getTracks().length,
+        videoTracks: remoteStream.getVideoTracks().length,
+        audioTracks: remoteStream.getAudioTracks().length,
+        hasActiveTracks: remoteStream.getTracks().some(t => t.readyState === 'live'),
+        activeVideoTracks: remoteStream.getVideoTracks().filter(t => t.readyState === 'live' && t.enabled).length,
+        activeAudioTracks: remoteStream.getAudioTracks().filter(t => t.readyState === 'live' && t.enabled).length
+      });
+      
+      setRemoteStreams(prev => {
+        // Remove any existing stream from this user or with same ID
+        const filtered = prev.filter(stream => 
+          stream.id !== remoteStream.id && 
+          !stream.id.includes(userId)
+        );
         const updated = [...filtered, remoteStream];
         console.log('✅ [VideoSession] Updated remoteStreams:', {
           newCount: updated.length,
@@ -437,10 +522,17 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
         console.warn('⚠️ [VideoSession] ICE disconnected for', userId, '- attempting ICE restart...');
         // Don't immediately give up - wait a moment for reconnection
         setTimeout(async () => {
+          // Re-check the peer connection still exists and needs restart
+          const currentPc = peerConnectionsRef.current.get(userId);
+          if (!currentPc || currentPc !== pc) {
+            console.log('ℹ️ [VideoSession] Peer connection changed for', userId, '- skipping restart');
+            return;
+          }
+          
           if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-            console.log('🔄 [VideoSession] Attempting ICE restart for', userId);
+            console.log('🔄 [VideoSession] Attempting isolated ICE restart for', userId);
             try {
-              // Restart ICE without recreating the entire peer connection
+              // Restart ICE ONLY for this peer connection without affecting others
               const offer = await pc.createOffer({ iceRestart: true });
               await pc.setLocalDescription(offer);
               if (signalingClientRef.current && isInitiator) {
@@ -449,11 +541,65 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
               }
             } catch (error) {
               console.error('❌ [VideoSession] ICE restart failed for', userId, ':', error);
+              // If restart fails completely, clean up this peer connection
+              console.log('🧹 [VideoSession] Cleaning up failed peer connection for', userId);
+              pc.close();
+              peerConnectionsRef.current.delete(userId);
+              setPeerConnections(prev => {
+                const updated = new Map(prev);
+                updated.delete(userId);
+                return updated;
+              });
             }
           }
         }, 3000); // Wait 3 seconds before restart
       } else if (pc.iceConnectionState === 'failed') {
         console.error('❌ [VideoSession] ICE connection failed for', userId);
+        
+        // Immediately clean up the failed connection
+        console.log('🧹 [VideoSession] Cleaning up failed peer connection for', userId);
+        pc.close();
+        peerConnectionsRef.current.delete(userId);
+        setPeerConnections(prev => {
+          const updated = new Map(prev);
+          updated.delete(userId);
+          return updated;
+        });
+        
+        // Remove stream associated with this user
+        setRemoteStreams(prev => {
+          const filtered = prev.filter(stream => {
+            if (stream.id.includes(userId)) {
+              console.log('🧹 [VideoSession] Removing stream for failed connection', userId, 'streamId:', stream.id);
+              // Stop all tracks
+              stream.getTracks().forEach(track => track.stop());
+              return false;
+            }
+            return true;
+          });
+          console.log('🧹 [VideoSession] Streams after failed connection cleanup:', filtered.length, 'remaining');
+          return filtered;
+        });
+        
+        // Remove from connected peers
+        setConnectedPeers(prev => {
+          const updated = new Set(prev);
+          updated.delete(userId);
+          return updated;
+        });
+        
+        // Clear connection timeout
+        clearConnectionTimeout(userId);
+        
+        // Clear connection attempts
+        setConnectionAttempts(prev => {
+          const updated = new Map(prev);
+          updated.delete(userId);
+          return updated;
+        });
+        
+        // Clear ICE candidate queue
+        iceCandidateQueues.current.delete(userId);
       }
     };
     
@@ -571,7 +717,9 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
           joined_at: new Date().toISOString()
         }, {
           onConflict: 'session_id,user_id'
-        });
+        })
+        .select('id')
+        .single();
 
       if (error) {
         console.error('❌ [VideoSession] Failed to register participant:', error);
@@ -610,14 +758,36 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
     }
   }, [sessionId, user?.id, user?.email, user?.user_metadata?.fullName, isTherapist, isAuthenticated, toast]);
 
-  // WebRTC session controls
-  const joinSession = useCallback(async () => {
-    try {
-      console.log('🚀 [VideoSession] Starting WebRTC session join...');
-      setConnectionState('CONNECTING');
-      
-      // Get user media with quality constraints
-      const stream = await navigator.mediaDevices.getUserMedia({
+  // Detect if device is mobile
+  const isMobileDevice = useCallback(() => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (navigator.maxTouchPoints > 0 && window.innerWidth < 768);
+  }, []);
+
+  // Get optimized media constraints for device type
+  const getMediaConstraints = useCallback(() => {
+    const isMobile = isMobileDevice();
+    console.log('📱 [VideoSession] Device type:', isMobile ? 'Mobile' : 'Desktop');
+    
+    if (isMobile) {
+      // Mobile-optimized constraints (lower quality for better performance)
+      return {
+        video: {
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 24, max: 30 },
+          facingMode: 'user'
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 48000
+        }
+      };
+    } else {
+      // Desktop constraints (higher quality)
+      return {
         video: {
           width: { ideal: 1280, max: 1920 },
           height: { ideal: 720, max: 1080 },
@@ -629,6 +799,48 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
           noiseSuppression: true,
           autoGainControl: true
         }
+      };
+    }
+  }, [isMobileDevice]);
+
+  // WebRTC session controls
+  const joinSession = useCallback(async () => {
+    try {
+      console.log('🚀 [VideoSession] Starting WebRTC session join...');
+      setConnectionState('CONNECTING');
+      
+      // Get user media with device-optimized constraints
+      const constraints = getMediaConstraints();
+      console.log('🎥 [VideoSession] Using media constraints:', constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Monitor media track states
+      stream.getTracks().forEach(track => {
+        console.log(`📊 [VideoSession] ${track.kind} track state:`, {
+          id: track.id,
+          label: track.label,
+          readyState: track.readyState,
+          enabled: track.enabled,
+          muted: track.muted
+        });
+        
+        // Monitor track state changes
+        track.onended = () => {
+          console.warn(`⚠️ [VideoSession] ${track.kind} track ended unexpectedly`);
+          toast({
+            title: `${track.kind === 'video' ? 'Camera' : 'Microphone'} Stopped`,
+            description: `Your ${track.kind} has stopped. Please check your device.`,
+            variant: "destructive"
+          });
+        };
+        
+        track.onmute = () => {
+          console.warn(`🔇 [VideoSession] ${track.kind} track muted`);
+        };
+        
+        track.onunmute = () => {
+          console.log(`🔊 [VideoSession] ${track.kind} track unmuted`);
+        };
       });
       
       setLocalStream(stream);
@@ -650,13 +862,38 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
             
             try {
               if (message.type === 'offer') {
-                // Handle incoming offer - avoid duplicate connections
-                if (hasExistingConnection(message.senderId)) {
-                  console.log('🔗 [VideoSession] Ignoring offer - connection already exists for', message.senderId);
-                  return;
+                console.log('🤝 [VideoSession] Processing offer from', message.senderId);
+                
+                // Check if we already have a peer connection for this user
+                const existingPc = peerConnectionsRef.current.get(message.senderId);
+                if (existingPc) {
+                  console.log('⚠️ [VideoSession] Peer connection already exists for', message.senderId, '- cleaning up old connection');
+                  
+                  // Clean up old connection and stream before creating new one
+                  existingPc.close();
+                  peerConnectionsRef.current.delete(message.senderId);
+                  
+                  // Remove old stream
+                  setRemoteStreams(prev => {
+                    const filtered = prev.filter(stream => {
+                      if (stream.id.includes(message.senderId)) {
+                        console.log('🧹 [VideoSession] Removing old stream during reconnect', message.senderId, 'streamId:', stream.id);
+                        stream.getTracks().forEach(track => track.stop());
+                        return false;
+                      }
+                      return true;
+                    });
+                    return filtered;
+                  });
+                  
+                  // Remove from connected peers
+                  setConnectedPeers(prev => {
+                    const updated = new Set(prev);
+                    updated.delete(message.senderId);
+                    return updated;
+                  });
                 }
                 
-                console.log('🤝 [VideoSession] Processing offer from', message.senderId);
                 const pc = createPeerConnection(message.senderId, false);
                 
                 // Clear any existing timeout since we're processing an offer
@@ -699,10 +936,56 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
                 // Clear connection timeout since we got an answer
                 clearConnectionTimeout(message.senderId);
                 
+                // Create unique fingerprint for this answer to prevent duplicates
+                const answerFingerprint = `${message.senderId}-${JSON.stringify(message.payload).substring(0, 100)}`;
+                
+                if (processedAnswers.current.has(answerFingerprint)) {
+                  console.log('🔄 [VideoSession] Duplicate answer detected from', message.senderId, '- ignoring');
+                  return;
+                }
+                
                 try {
                   if (pc.signalingState === 'have-local-offer') {
                     await pc.setRemoteDescription(message.payload);
                     console.log('✅ [VideoSession] Answer processed successfully from', message.senderId);
+                    
+                    // Mark this answer as processed
+                    processedAnswers.current.add(answerFingerprint);
+                    
+                    // Process queued ICE candidates now that remote description is set
+                    const queuedCandidates = iceCandidateQueues.current.get(message.senderId) || [];
+                    if (queuedCandidates.length > 0) {
+                      console.log('🔄 [VideoSession] Processing', queuedCandidates.length, 'queued ICE candidates for', message.senderId);
+                      for (const candidate of queuedCandidates) {
+                        try {
+                          await pc.addIceCandidate(candidate);
+                        } catch (err) {
+                          console.warn('⚠️ [VideoSession] Failed to add queued ICE candidate:', err);
+                        }
+                      }
+                      // Clear the queue
+                      iceCandidateQueues.current.delete(message.senderId);
+                      console.log('✅ [VideoSession] Queued ICE candidates processed for', message.senderId);
+                    }
+                  } else if (pc.signalingState === 'stable') {
+                    console.log('ℹ️ [VideoSession] Received answer in stable state from', message.senderId);
+                    
+                    // Check if connection is actually failed/disconnected and needs cleanup
+                    const connectionState = pc.connectionState;
+                    if (connectionState === 'disconnected' || connectionState === 'failed') {
+                      console.log('🔄 [VideoSession] Connection failed/disconnected, cleaning up peer for rejoin');
+                      // Close the old connection
+                      pc.close();
+                      peerConnectionsRef.current.delete(message.senderId);
+                      setPeerConnections(prev => {
+                        const updated = new Map(prev);
+                        updated.delete(message.senderId);
+                        return updated;
+                      });
+                      // Don't process this answer - let the peer rejoin fresh
+                      return;
+                    }
+                    // Otherwise, connection is stable and working - ignore duplicate answer
                   } else {
                     console.warn('⚠️ [VideoSession] Cannot process answer - wrong signaling state:', pc.signalingState);
                   }
@@ -727,10 +1010,19 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
                   });
                   
                   if (pc.remoteDescription && pc.signalingState !== 'closed') {
+                    // Remote description is set, add candidate immediately
                     await pc.addIceCandidate(candidate);
                     console.log('✅ [VideoSession] ICE candidate added for', message.senderId);
+                  } else if (pc.signalingState !== 'closed') {
+                    // Queue candidate until remote description is set
+                    if (!iceCandidateQueues.current.has(message.senderId)) {
+                      iceCandidateQueues.current.set(message.senderId, []);
+                    }
+                    iceCandidateQueues.current.get(message.senderId)!.push(candidate);
+                    console.log('🔄 [VideoSession] ICE candidate queued for', message.senderId, 
+                      'Queue size:', iceCandidateQueues.current.get(message.senderId)!.length);
                   } else {
-                    console.warn('⚠️ [VideoSession] Cannot add ICE candidate - no remote description or connection closed for', message.senderId);
+                    console.warn('⚠️ [VideoSession] Cannot add ICE candidate - connection closed for', message.senderId);
                   }
                 } catch (iceError) {
                   console.error('❌ [VideoSession] Failed to add ICE candidate:', iceError);
@@ -789,9 +1081,11 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
             console.log('👋 [VideoSession] User left:', userId);
             
             // Clean up peer connection
-            const pc = peerConnections.get(userId);
+            const pc = peerConnectionsRef.current.get(userId);
             if (pc) {
+              console.log('🧹 [VideoSession] Cleaning up peer connection for', userId);
               pc.close();
+              peerConnectionsRef.current.delete(userId);
               setPeerConnections(prev => {
                 const updated = new Map(prev);
                 updated.delete(userId);
@@ -799,19 +1093,42 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
               });
             }
             
-            // Clean up connection tracking
+            // Remove stream associated with this user
+            setRemoteStreams(prev => {
+              const filtered = prev.filter(stream => {
+                // Match stream by checking if stream.id includes userId (how we track streams)
+                if (stream.id.includes(userId)) {
+                  console.log('🧹 [VideoSession] Removing stream for user', userId, 'streamId:', stream.id);
+                  // Stop all tracks
+                  stream.getTracks().forEach(track => track.stop());
+                  return false;
+                }
+                return true;
+              });
+              console.log('🧹 [VideoSession] Streams after cleanup:', filtered.length, 'remaining');
+              return filtered;
+            });
+            
+            // Remove from connected peers
+            setConnectedPeers(prev => {
+              const updated = new Set(prev);
+              updated.delete(userId);
+              return updated;
+            });
+            
+            // Clear connection timeout
+            clearConnectionTimeout(userId);
+            
+            // Clear connection attempts
             setConnectionAttempts(prev => {
               const updated = new Map(prev);
               updated.delete(userId);
               return updated;
             });
             
-            setConnectedPeers(prev => {
-              const newSet = new Set([...prev]);
-              newSet.delete(userId);
-              return newSet;
-            });
-          }
+            // Clear ICE candidate queue
+            iceCandidateQueues.current.delete(userId);
+          },
         });
 
         const connected = await client.connect();
@@ -1077,6 +1394,7 @@ export const VideoSessionProvider: React.FC<VideoSessionProviderProps> = ({
     remoteVideoRef,
     localStream,
     remoteStreams,
+    connectedPeers: Array.from(connectedPeers),
     
     // Session controls
     joinSession,
