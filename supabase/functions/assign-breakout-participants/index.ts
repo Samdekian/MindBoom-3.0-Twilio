@@ -202,10 +202,18 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("❌ [assign-breakout-participants] Error:", error);
+    console.error("❌ [assign-breakout-participants] Error stack:", error instanceof Error ? error.stack : 'No stack trace');
+    console.error("❌ [assign-breakout-participants] Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : typeof error,
+      cause: error instanceof Error ? error.cause : undefined
+    });
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error instanceof Error ? error.message : 'Internal server error'
+        error: error instanceof Error ? error.message : 'Internal server error',
+        details: error instanceof Error ? error.name : String(error)
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

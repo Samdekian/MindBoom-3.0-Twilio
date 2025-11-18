@@ -291,43 +291,63 @@ export class BreakoutRoomManager {
     console.log('📝 [BreakoutManager] Assignments to create:', assignments.length);
     console.log('📝 [BreakoutManager] Sample assignment:', assignments[0] || 'No assignments');
 
-    // Use edge function to assign participants (bypasses RLS)
-    const { data, error } = await supabase.functions.invoke('assign-breakout-participants', {
-      body: {
-        session_id: this.sessionId,
-        assignments
-      }
-    });
+    // Get auth token for direct fetch call
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
 
-    if (error) {
-      console.error('❌ [BreakoutManager] Edge function error:', error);
-      console.error('❌ [BreakoutManager] Error details:', {
-        message: error.message,
-        context: error.context,
-        status: (error as any).status,
-        statusText: (error as any).statusText
+    // Use fetch directly to get full error response
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aoumioacfvttagverbna.supabase.co';
+    const functionUrl = `${supabaseUrl}/functions/v1/assign-breakout-participants`;
+    
+    try {
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+        },
+        body: JSON.stringify({
+          session_id: this.sessionId,
+          assignments
+        })
       });
-      
-      // Try to extract error message from response
-      let errorMessage = error.message || 'Unknown error';
-      if (error.context && typeof error.context === 'object') {
-        const context = error.context as any;
-        if (context.status) {
-          errorMessage = `Edge function returned status ${context.status}: ${errorMessage}`;
-        }
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        console.error('❌ [BreakoutManager] Edge function error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: responseData
+        });
+        
+        const errorMsg = responseData?.error || responseData?.message || `Edge function returned status ${response.status}`;
+        throw new Error('Failed to assign participants: ' + errorMsg);
+      }
+
+      if (!responseData || !responseData.success) {
+        console.error('❌ [BreakoutManager] Assignment failed:', responseData);
+        const errorMsg = responseData?.error || 'Failed to assign participants';
+        console.error('❌ [BreakoutManager] Error message:', errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      console.log('✅ [BreakoutManager] Auto-assigned participants:', responseData.assigned_count || 0);
+    } catch (fetchError: any) {
+      // If it's already our Error, rethrow it
+      if (fetchError.message?.includes('Failed to assign participants')) {
+        throw fetchError;
       }
       
-      throw new Error('Failed to assign participants: ' + errorMessage);
+      // Otherwise, wrap it
+      console.error('❌ [BreakoutManager] Fetch error:', fetchError);
+      throw new Error('Failed to assign participants: ' + (fetchError.message || 'Network error'));
     }
-
-    if (!data || !data.success) {
-      console.error('❌ [BreakoutManager] Assignment failed:', data);
-      const errorMsg = data?.error || 'Failed to assign participants';
-      console.error('❌ [BreakoutManager] Error message:', errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    console.log('✅ [BreakoutManager] Auto-assigned participants:', data.assigned_count || 0);
   }
 
   /**
