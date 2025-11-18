@@ -74,6 +74,27 @@ serve(async (req) => {
       );
     }
 
+    // Check if room already exists in database first
+    const { data: existingRoom, error: checkError } = await supabase
+      .from('breakout_rooms')
+      .select('*')
+      .eq('session_id', session_id)
+      .eq('room_name', room_name)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (existingRoom) {
+      console.log("✅ [create-breakout-room] Room already exists in database, returning existing room");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          breakout_room: existingRoom,
+          twilio_room_sid: existingRoom.twilio_room_sid
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get Twilio credentials
     const twilioAccountSid = Deno.env.get('TWILIO_ACCOUNT_SID');
     const twilioAuthToken = Deno.env.get('TWILIO_AUTH_TOKEN');
@@ -238,20 +259,53 @@ serve(async (req) => {
     if (dbError) {
       console.error("❌ [create-breakout-room] Database error:", dbError);
       
+      // Handle duplicate key error - room was created between our check and insert
+      if (dbError.code === '23505') {
+        console.log("ℹ️ [create-breakout-room] Duplicate key error, fetching existing room");
+        
+        const { data: existingRoom, error: fetchError } = await supabase
+          .from('breakout_rooms')
+          .select('*')
+          .eq('session_id', session_id)
+          .eq('room_name', room_name)
+          .maybeSingle();
+        
+        if (existingRoom) {
+          console.log("✅ [create-breakout-room] Found existing room after duplicate key error");
+          return new Response(
+            JSON.stringify({
+              success: true,
+              breakout_room: existingRoom,
+              twilio_room_sid: existingRoom.twilio_room_sid || twilioRoomSid
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+      
       // Try to delete the Twilio room since DB insert failed
-      await fetch(`${twilioUrl}/${twilioRoomSid}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${authHeaderTwilio}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          'Status': 'completed'
-        }).toString()
-      });
+      try {
+        await fetch(`${twilioUrl}/${twilioRoomSid}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${authHeaderTwilio}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            'Status': 'completed'
+          }).toString()
+        });
+      } catch (cleanupError) {
+        console.error("⚠️ [create-breakout-room] Failed to cleanup Twilio room:", cleanupError);
+      }
 
       return new Response(
-        JSON.stringify({ success: false, error: 'Database error' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Database error',
+          details: dbError.message,
+          code: dbError.code
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
