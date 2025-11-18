@@ -289,6 +289,7 @@ export class BreakoutRoomManager {
     });
 
     console.log('📝 [BreakoutManager] Assignments to create:', assignments.length);
+    console.log('📝 [BreakoutManager] Sample assignment:', assignments[0] || 'No assignments');
 
     // Use edge function to assign participants (bypasses RLS)
     const { data, error } = await supabase.functions.invoke('assign-breakout-participants', {
@@ -300,12 +301,30 @@ export class BreakoutRoomManager {
 
     if (error) {
       console.error('❌ [BreakoutManager] Edge function error:', error);
-      throw new Error('Failed to assign participants: ' + (error.message || 'Unknown error'));
+      console.error('❌ [BreakoutManager] Error details:', {
+        message: error.message,
+        context: error.context,
+        status: (error as any).status,
+        statusText: (error as any).statusText
+      });
+      
+      // Try to extract error message from response
+      let errorMessage = error.message || 'Unknown error';
+      if (error.context && typeof error.context === 'object') {
+        const context = error.context as any;
+        if (context.status) {
+          errorMessage = `Edge function returned status ${context.status}: ${errorMessage}`;
+        }
+      }
+      
+      throw new Error('Failed to assign participants: ' + errorMessage);
     }
 
     if (!data || !data.success) {
       console.error('❌ [BreakoutManager] Assignment failed:', data);
-      throw new Error(data?.error || 'Failed to assign participants');
+      const errorMsg = data?.error || 'Failed to assign participants';
+      console.error('❌ [BreakoutManager] Error message:', errorMsg);
+      throw new Error(errorMsg);
     }
 
     console.log('✅ [BreakoutManager] Auto-assigned participants:', data.assigned_count || 0);

@@ -24,8 +24,11 @@ serve(async (req) => {
   }
 
   try {
+    console.log("🏗️ [assign-breakout-participants] Processing request...");
+    
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error("❌ [assign-breakout-participants] Missing authorization header");
       return new Response(
         JSON.stringify({ success: false, error: 'Missing authorization' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -34,24 +37,66 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error("❌ [assign-breakout-participants] Missing Supabase configuration");
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server configuration error' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+      console.error("❌ [assign-breakout-participants] Authentication failed:", authError?.message);
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { session_id, assignments }: AssignRequest = await req.json();
+    console.log("✅ [assign-breakout-participants] User authenticated:", user.id);
+
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (parseError) {
+      console.error("❌ [assign-breakout-participants] Failed to parse request body:", parseError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid request body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { session_id, assignments }: AssignRequest = requestBody;
+
+    console.log("📝 [assign-breakout-participants] Request data:", {
+      session_id,
+      assignment_count: assignments?.length || 0,
+      sample_assignment: assignments?.[0]
+    });
 
     if (!session_id || !assignments || !Array.isArray(assignments)) {
+      console.error("❌ [assign-breakout-participants] Missing required fields:", {
+        has_session_id: !!session_id,
+        has_assignments: !!assignments,
+        is_array: Array.isArray(assignments)
+      });
       return new Response(
-        JSON.stringify({ success: false, error: 'Missing required fields' }),
+        JSON.stringify({ success: false, error: 'Missing required fields: session_id and assignments array required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (assignments.length === 0) {
+      console.log("⚠️ [assign-breakout-participants] No assignments to process");
+      return new Response(
+        JSON.stringify({ success: true, assigned_count: 0 }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -62,32 +107,75 @@ serve(async (req) => {
       .eq('id', session_id)
       .single();
 
-    if (sessionError || !session || session.therapist_id !== user.id) {
+    if (sessionError) {
+      console.error("❌ [assign-breakout-participants] Failed to fetch session:", sessionError);
+      return new Response(
+        JSON.stringify({ success: false, error: `Failed to verify session: ${sessionError.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!session) {
+      console.error("❌ [assign-breakout-participants] Session not found:", session_id);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Session not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (session.therapist_id !== user.id) {
+      console.error("❌ [assign-breakout-participants] User not authorized:", {
+        user_id: user.id,
+        therapist_id: session.therapist_id
+      });
       return new Response(
         JSON.stringify({ success: false, error: 'Not authorized for this session' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log("✅ [assign-breakout-participants] Session verified, therapist authorized");
+
+    // Prepare insert data
+    const insertData = assignments.map(a => ({
+      breakout_room_id: a.breakout_room_id,
+      participant_id: a.participant_id,
+      user_id: a.user_id,
+      participant_name: a.participant_name,
+      is_active: true
+    }));
+
+    console.log("📝 [assign-breakout-participants] Inserting assignments:", {
+      count: insertData.length,
+      sample: insertData[0]
+    });
+
     // Insert assignments using service role (bypasses RLS)
     const { data, error } = await supabase
       .from('breakout_room_participants')
-      .insert(assignments.map(a => ({
-        breakout_room_id: a.breakout_room_id,
-        participant_id: a.participant_id,
-        user_id: a.user_id,
-        participant_name: a.participant_name,
-        is_active: true
-      })))
+      .insert(insertData)
       .select();
 
     if (error) {
       console.error("❌ [assign-breakout-participants] Insert error:", error);
+      console.error("❌ [assign-breakout-participants] Error details:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
       return new Response(
-        JSON.stringify({ success: false, error: error.message }),
+        JSON.stringify({ 
+          success: false, 
+          error: error.message,
+          details: error.details,
+          code: error.code
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log("✅ [assign-breakout-participants] Inserted assignments:", data?.length || 0);
 
     // Update room participant counts
     const roomIds = [...new Set(assignments.map(a => a.breakout_room_id))];
