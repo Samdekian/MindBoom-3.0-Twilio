@@ -112,6 +112,7 @@ EDGE_FUNCTIONS=(
     "close-breakout-room"
     "move-participant"
     "bulk-assign-participants"
+    "assign-breakout-participants"
 )
 
 for func in "${EDGE_FUNCTIONS[@]}"; do
