@@ -11,6 +11,7 @@ interface Assignment {
   participant_id: string;
   user_id: string | null;
   participant_name: string;
+  identity?: string;
 }
 
 interface AssignRequest {
@@ -142,6 +143,7 @@ serve(async (req) => {
       participant_id: a.participant_id,
       user_id: a.user_id,
       participant_name: a.participant_name,
+      identity: a.identity || a.user_id || `participant-${a.participant_id}`,
       is_active: true
     }));
 

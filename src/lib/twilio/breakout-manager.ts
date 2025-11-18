@@ -276,6 +276,7 @@ export class BreakoutRoomManager {
       participant_id: string;
       user_id: string | null;
       participant_name: string;
+      identity: string;
     }> = [];
     
     shuffled.forEach((participant, index) => {
@@ -284,7 +285,8 @@ export class BreakoutRoomManager {
         breakout_room_id: rooms[roomIndex].id,
         participant_id: participant.id,
         user_id: participant.user_id || null,
-        participant_name: participant.participant_name || 'Unknown'
+        participant_name: participant.participant_name || 'Unknown',
+        identity: participant.user_id || `participant-${participant.id}`
       });
     });
 
