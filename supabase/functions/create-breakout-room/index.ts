@@ -251,7 +251,8 @@ serve(async (req) => {
         room_name,
         twilio_room_sid: twilioRoomSid,
         max_participants,
-        created_by: user.id
+        created_by: user.id,
+        is_active: true
       })
       .select()
       .single();
