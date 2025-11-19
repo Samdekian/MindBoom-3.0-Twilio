@@ -19,12 +19,13 @@ interface BreakoutAssignmentPayload {
 interface UseBreakoutAssignmentListenerOptions {
   enabled?: boolean;
   onAssigned?: (payload: BreakoutAssignmentPayload) => void;
+  disconnectFromMainSession?: () => Promise<void>;
 }
 
 export function useBreakoutAssignmentListener(
   options: UseBreakoutAssignmentListenerOptions = {}
 ) {
-  const { enabled = true, onAssigned } = options;
+  const { enabled = true, onAssigned, disconnectFromMainSession } = options;
   const { toast } = useToast();
 
   useEffect(() => {
@@ -61,6 +62,13 @@ export function useBreakoutAssignmentListener(
 
           if (assignment.action === 'join') {
             try {
+              // Disconnect from main peer-to-peer session first
+              if (disconnectFromMainSession) {
+                console.log('🔌 [BreakoutAssignmentListener] Disconnecting from main session...');
+                await disconnectFromMainSession();
+                console.log('✅ [BreakoutAssignmentListener] Disconnected from main session');
+              }
+
               // Get user identity
               const identity = user.email?.split('@')[0] || user.id;
 
@@ -71,8 +79,6 @@ export function useBreakoutAssignmentListener(
                 assignment.twilio_room_sid
               );
 
-              // Disconnect from current connections (peer-to-peer)
-              // Note: This should be handled by the main video context
               console.log('🔌 [BreakoutAssignmentListener] Preparing to join breakout room');
 
               // Use TwilioRoomManager to connect to breakout room
@@ -127,6 +133,6 @@ export function useBreakoutAssignmentListener(
         channel = null;
       }
     };
-  }, [enabled, onAssigned, toast]);
+  }, [enabled, onAssigned, disconnectFromMainSession, toast]);
 }
 
