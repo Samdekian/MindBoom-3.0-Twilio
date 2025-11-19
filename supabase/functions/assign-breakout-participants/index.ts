@@ -137,8 +137,52 @@ serve(async (req) => {
 
     console.log("✅ [assign-breakout-participants] Session verified, therapist authorized");
 
-    // Prepare insert data
-    const insertData = assignments.map(a => ({
+    // Check for existing assignments to avoid duplicates
+    const roomIds = [...new Set(assignments.map(a => a.breakout_room_id))];
+    const existingAssignments: Array<{ breakout_room_id: string; user_id: string | null; participant_id: string }> = [];
+    
+    for (const roomId of roomIds) {
+      const { data: existing } = await supabase
+        .from('breakout_room_participants')
+        .select('breakout_room_id, user_id, participant_id')
+        .eq('breakout_room_id', roomId)
+        .eq('is_active', true);
+      
+      if (existing) {
+        existingAssignments.push(...existing);
+      }
+    }
+
+    // Filter out assignments that already exist
+    const newAssignments = assignments.filter(assignment => {
+      const exists = existingAssignments.some(existing => 
+        existing.breakout_room_id === assignment.breakout_room_id &&
+        (assignment.user_id ? existing.user_id === assignment.user_id : existing.participant_id === assignment.participant_id)
+      );
+      if (exists) {
+        console.log("ℹ️ [assign-breakout-participants] Skipping duplicate assignment:", {
+          breakout_room_id: assignment.breakout_room_id,
+          user_id: assignment.user_id,
+          participant_id: assignment.participant_id
+        });
+      }
+      return !exists;
+    });
+
+    if (newAssignments.length === 0) {
+      console.log("ℹ️ [assign-breakout-participants] All participants already assigned");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          assigned_count: 0,
+          message: 'All participants were already assigned'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Prepare insert data for new assignments only
+    const insertData = newAssignments.map(a => ({
       breakout_room_id: a.breakout_room_id,
       participant_id: a.participant_id,
       user_id: a.user_id,
@@ -148,7 +192,9 @@ serve(async (req) => {
     }));
 
     console.log("📝 [assign-breakout-participants] Inserting assignments:", {
-      count: insertData.length,
+      total: assignments.length,
+      new: insertData.length,
+      skipped: assignments.length - insertData.length,
       sample: insertData[0]
     });
 
@@ -166,6 +212,28 @@ serve(async (req) => {
         details: error.details,
         hint: error.hint
       });
+      
+      // Handle duplicate key error gracefully
+      if (error.code === '23505') {
+        console.log("ℹ️ [assign-breakout-participants] Duplicate key error, fetching existing assignments");
+        
+        // Fetch all active assignments for these rooms to return accurate count
+        const { count } = await supabase
+          .from('breakout_room_participants')
+          .select('*', { count: 'exact', head: true })
+          .in('breakout_room_id', roomIds)
+          .eq('is_active', true);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            assigned_count: count || 0,
+            message: 'Some participants were already assigned'
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -179,8 +247,7 @@ serve(async (req) => {
 
     console.log("✅ [assign-breakout-participants] Inserted assignments:", data?.length || 0);
 
-    // Update room participant counts
-    const roomIds = [...new Set(assignments.map(a => a.breakout_room_id))];
+    // Update room participant counts (roomIds already defined above)
     for (const roomId of roomIds) {
       const { count } = await supabase
         .from('breakout_room_participants')
