@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import ParticipantsList from './ParticipantsList';
 import { useInstantSessionParticipants, type InstantSessionParticipant } from '@/hooks/video-conference/use-instant-session-participants';
 import BreakoutRoomManager from '../breakout/BreakoutRoomManager';
+import { useBreakoutAssignmentListener } from '@/hooks/video-conference/use-breakout-assignment-listener';
 
 interface GroupSessionContainerProps {
   sessionId: string;
@@ -51,6 +52,14 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
 
   // Enhanced device manager for better device detection and status
   const { deviceState } = useEnhancedDeviceManager();
+
+  // Listen for breakout room assignments (for participants)
+  useBreakoutAssignmentListener({
+    enabled: !isTherapist && isInSession,
+    onAssigned: (assignment) => {
+      console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
+    }
+  });
 
   // Participants management
   const { 
