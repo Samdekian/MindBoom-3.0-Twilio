@@ -87,6 +87,10 @@ const RoomCreationDialog: React.FC<RoomCreationDialogProps> = ({
       };
 
       await onCreateRooms(config);
+      
+      // Wait a bit for UI to update before closing dialog
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       onOpenChange(false);
 
       // Reset form
