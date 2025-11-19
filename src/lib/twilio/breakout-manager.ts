@@ -470,6 +470,39 @@ export class BreakoutRoomManager {
     try {
       console.log('🔍 [BreakoutManager] Fetching active rooms for session:', this.sessionId);
       
+      // First, check if we can query at all (test RLS)
+      const { data: testData, error: testError } = await supabase
+        .from('breakout_rooms')
+        .select('id, session_id, is_active, room_name')
+        .eq('session_id', this.sessionId)
+        .limit(10);
+      
+      console.log('🧪 [BreakoutManager] RLS test query (all rooms):', {
+        found: testData?.length || 0,
+        error: testError,
+        errorCode: testError?.code,
+        errorMessage: testError?.message,
+        sample: testData?.[0]
+      });
+      
+      // Check current user's session participation
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: participation } = await supabase
+          .from('instant_session_participants')
+          .select('id, user_id, is_active')
+          .eq('session_id', this.sessionId)
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+        
+        console.log('👤 [BreakoutManager] Current user participation:', {
+          userId: user.id,
+          isParticipant: !!participation,
+          participation
+        });
+      }
+      
       // First get rooms
       const { data: rooms, error: roomsError } = await supabase
         .from('breakout_rooms')
@@ -480,6 +513,12 @@ export class BreakoutRoomManager {
 
       if (roomsError) {
         console.error('❌ [BreakoutManager] Failed to get rooms:', roomsError);
+        console.error('❌ [BreakoutManager] Error details:', {
+          code: roomsError.code,
+          message: roomsError.message,
+          details: roomsError.details,
+          hint: roomsError.hint
+        });
         return [];
       }
 
@@ -487,6 +526,19 @@ export class BreakoutRoomManager {
 
       if (!rooms || rooms.length === 0) {
         console.log('⚠️ [BreakoutManager] No active rooms found for session:', this.sessionId);
+        
+        // Try querying without is_active filter to see if rooms exist but are inactive
+        const { data: allRooms } = await supabase
+          .from('breakout_rooms')
+          .select('id, room_name, is_active, session_id, created_at')
+          .eq('session_id', this.sessionId)
+          .order('created_at', { ascending: true });
+        
+        console.log('🔍 [BreakoutManager] All rooms (including inactive):', {
+          count: allRooms?.length || 0,
+          rooms: allRooms
+        });
+        
         return [];
       }
 
