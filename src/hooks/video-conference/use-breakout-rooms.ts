@@ -129,16 +129,28 @@ export function useBreakoutRooms(options: UseBreakoutRoomsOptions): UseBreakoutR
    * Refresh rooms list
    */
   const refreshRooms = useCallback(async () => {
-    if (!managerRef.current) return;
+    if (!managerRef.current) {
+      console.warn('⚠️ [useBreakoutRooms] Manager not initialized, cannot refresh');
+      return;
+    }
 
     try {
+      console.log('🔄 [useBreakoutRooms] Refreshing rooms...');
       const activeRooms = await managerRef.current.getActiveRooms();
+      console.log('📋 [useBreakoutRooms] Refreshed rooms:', activeRooms.length, activeRooms);
+      
       setRooms(activeRooms);
 
       // Update state
       const roomsMap = new Map(activeRooms.map(room => [room.id, room]));
       const activeCount = activeRooms.filter(r => r.is_active).length;
       const totalParticipants = activeRooms.reduce((sum, r) => sum + r.current_participants, 0);
+
+      console.log('📊 [useBreakoutRooms] Updated state:', {
+        activeCount,
+        totalParticipants,
+        status: activeCount > 0 ? 'active' : 'closed'
+      });
 
       setState(prev => ({
         ...prev,
@@ -196,13 +208,22 @@ export function useBreakoutRooms(options: UseBreakoutRoomsOptions): UseBreakoutR
 
       const createdRooms = await managerRef.current.createBreakoutRooms(config);
 
+      console.log('✅ [useBreakoutRooms] Rooms created, refreshing UI...', createdRooms.length);
+
+      // Refresh rooms and assignments
+      await refreshRooms();
+      await refreshAssignments();
+
+      // Double-check refresh after a short delay to ensure UI updates
+      setTimeout(async () => {
+        await refreshRooms();
+        await refreshAssignments();
+      }, 500);
+
       toast({
         title: 'Breakout rooms created',
         description: `Successfully created ${createdRooms.length} rooms`
       });
-
-      await refreshRooms();
-      await refreshAssignments();
 
       setState(prev => ({ ...prev, status: 'active' }));
 

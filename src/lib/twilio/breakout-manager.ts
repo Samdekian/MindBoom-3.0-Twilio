@@ -159,6 +159,14 @@ export class BreakoutRoomManager {
         await this.autoAssignParticipants(participants, rooms);
       }
 
+      // Emit events for each created room
+      rooms.forEach(room => {
+        this.emitEvent({
+          type: 'room_created',
+          room
+        });
+      });
+
       console.log('✅ [BreakoutManager] Created rooms:', rooms.length);
       return rooms;
 
@@ -460,6 +468,8 @@ export class BreakoutRoomManager {
    */
   async getActiveRooms(): Promise<BreakoutRoomWithParticipants[]> {
     try {
+      console.log('🔍 [BreakoutManager] Fetching active rooms for session:', this.sessionId);
+      
       // First get rooms
       const { data: rooms, error: roomsError } = await supabase
         .from('breakout_rooms')
@@ -473,7 +483,10 @@ export class BreakoutRoomManager {
         return [];
       }
 
+      console.log('📋 [BreakoutManager] Found rooms:', rooms?.length || 0, rooms);
+
       if (!rooms || rooms.length === 0) {
+        console.log('⚠️ [BreakoutManager] No active rooms found for session:', this.sessionId);
         return [];
       }
 
