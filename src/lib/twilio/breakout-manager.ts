@@ -395,20 +395,99 @@ export class BreakoutRoomManager {
     try {
       console.log('🔄 [BreakoutManager] Moving participant:', request);
 
-      const { data, error } = await supabase.functions.invoke('move-participant', {
-        body: request
-      });
+      // Get participant details
+      const { data: participant, error: participantError } = await supabase
+        .from('instant_session_participants')
+        .select('user_id, participant_name')
+        .eq('id', request.participant_id)
+        .single();
 
-      if (error || !data.success) {
-        throw new Error(data?.error || 'Failed to move participant');
+      if (participantError || !participant) {
+        throw new Error('Participant not found');
       }
+
+      // Get breakout room details
+      const { data: room, error: roomError } = await supabase
+        .from('breakout_rooms')
+        .select('*')
+        .eq('id', request.to_room_id)
+        .single();
+
+      if (roomError || !room) {
+        throw new Error('Breakout room not found');
+      }
+
+      // Update or create participant assignment
+      const { error: upsertError } = await supabase
+        .from('breakout_room_participants')
+        .upsert({
+          breakout_room_id: request.to_room_id,
+          participant_id: request.participant_id,
+          user_id: participant.user_id,
+          participant_name: participant.participant_name,
+          identity: participant.user_id || `participant-${request.participant_id}`,
+          is_active: true,
+          joined_at: new Date().toISOString()
+        }, {
+          onConflict: 'participant_id',
+          ignoreDuplicates: false
+        });
+
+      if (upsertError) {
+        console.error('❌ [BreakoutManager] Failed to update participant assignment:', upsertError);
+        throw new Error('Failed to update participant assignment');
+      }
+
+      // Send real-time notification to participant to join the breakout room
+      if (participant.user_id) {
+        console.log('📢 [BreakoutManager] Sending breakout assignment to user:', participant.user_id);
+        
+        const channel = supabase.channel(`user:${participant.user_id}:breakout`);
+        
+        await channel.subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await channel.send({
+              type: 'broadcast',
+              event: 'breakout_assignment',
+              payload: {
+                room_id: request.to_room_id,
+                room_name: room.room_name,
+                twilio_room_sid: room.twilio_room_sid,
+                action: 'join'
+              }
+            });
+            
+            console.log('✅ [BreakoutManager] Breakout assignment sent');
+            
+            // Unsubscribe after sending
+            await supabase.removeChannel(channel);
+          }
+        });
+      }
+
+      // Record the transition
+      await supabase
+        .from('breakout_room_transitions')
+        .insert({
+          participant_id: request.participant_id,
+          from_room_id: request.from_room_id || null,
+          to_room_id: request.to_room_id,
+          transition_type: request.transition_type || 'manual',
+          reason: request.reason,
+          moved_by: (await supabase.auth.getUser()).data.user?.id
+        });
 
       this.emitEvent({
         type: 'participant_moved',
-        transition: data.transition
+        participant: {
+          id: request.participant_id,
+          name: participant.participant_name,
+          toRoomId: request.to_room_id,
+          toRoomName: room.room_name
+        }
       });
 
-      console.log('✅ [BreakoutManager] Participant moved');
+      console.log('✅ [BreakoutManager] Participant moved successfully');
 
     } catch (error) {
       console.error('❌ [BreakoutManager] Failed to move participant:', error);

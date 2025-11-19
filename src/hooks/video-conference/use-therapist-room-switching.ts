@@ -7,6 +7,7 @@ import { useState, useCallback } from 'react';
 import { TwilioVideoService } from '@/services/twilio-video-service';
 import { getRoomManager } from '@/lib/twilio/room-manager';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UseTherapistRoomSwitchingOptions {
   sessionId: string;
@@ -109,16 +110,28 @@ export function useTherapistRoomSwitching(
       // Disconnect from breakout room
       roomManager.disconnect();
 
-      // Get main room name
-      const mainRoomName = await TwilioVideoService.getOrCreateRoomForSession(sessionId);
+      // Get the main session token (not the Twilio room SID)
+      const { data: session, error } = await supabase
+        .from('instant_sessions')
+        .select('session_token, room_name')
+        .eq('id', sessionId)
+        .single();
 
-      // Get token for main room
+      if (error || !session) {
+        throw new Error('Failed to find main session');
+      }
+
+      // Use the actual room name from the session, or construct it from session_token
+      const mainRoomName = session.room_name || `session-${session.session_token}`;
+      console.log('🏠 [TwilioVideoService] Returning to main room:', mainRoomName);
+
+      // Get token for main session
       const tokenData = await TwilioVideoService.getAccessToken(
         therapistName,
         mainRoomName
       );
 
-      // Reconnect to main room
+      // Reconnect to main session
       await roomManager.connect({
         roomName: mainRoomName,
         token: tokenData.token,
@@ -132,30 +145,30 @@ export function useTherapistRoomSwitching(
       setCurrentRoomId(null);
       setCurrentRoomName(null);
 
-      // Log the return
+      // Log return
       if (previousRoom) {
-        await TwilioVideoService.logSessionEvent(sessionId, 'therapist_left_breakout', {
+        await TwilioVideoService.logSessionEvent(sessionId, 'therapist_returned_to_main', {
           previous_room: previousRoom
         });
       }
 
       toast({
         title: 'Returned to main session',
-        description: 'You are back in the main session'
+        description: 'You are back in the main room'
       });
 
     } catch (error: any) {
       console.error('❌ Failed to return to main session:', error);
       
       toast({
-        title: 'Failed to return to main session',
-        description: error.message || 'Please refresh the page',
+        title: 'Failed to return',
+        description: error.message || 'Could not return to main session',
         variant: 'destructive'
       });
     } finally {
       setIsSwitching(false);
     }
-  }, [isTherapist, isSwitching, sessionId, therapistName, currentRoomName, toast]);
+  }, [isTherapist, isSwitching, therapistName, sessionId, currentRoomName, toast]);
 
   return {
     currentRoomId,
