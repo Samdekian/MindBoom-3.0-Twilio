@@ -417,7 +417,14 @@ export class BreakoutRoomManager {
         throw new Error('Breakout room not found');
       }
 
-      // Update or create participant assignment
+      // First, deactivate any existing assignment for this participant
+      await supabase
+        .from('breakout_room_participants')
+        .update({ is_active: false, left_at: new Date().toISOString() })
+        .eq('participant_id', request.participant_id)
+        .eq('is_active', true);
+
+      // Then insert or update the new assignment
       const { error: upsertError } = await supabase
         .from('breakout_room_participants')
         .upsert({
@@ -427,9 +434,10 @@ export class BreakoutRoomManager {
           participant_name: participant.participant_name,
           identity: participant.user_id || `participant-${request.participant_id}`,
           is_active: true,
-          joined_at: new Date().toISOString()
+          joined_at: new Date().toISOString(),
+          left_at: null
         }, {
-          onConflict: 'participant_id',
+          onConflict: 'breakout_room_id,participant_id',
           ignoreDuplicates: false
         });
 

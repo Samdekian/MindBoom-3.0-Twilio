@@ -58,6 +58,11 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     enabled: !isTherapist && isInSession,
     onAssigned: (assignment) => {
       console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
+    },
+    disconnectFromMainSession: async () => {
+      // Disconnect from peer-to-peer session when moving to breakout room
+      console.log('🔌 [GroupSessionContainer] Disconnecting from main session for breakout room');
+      await leaveSession();
     }
   });
 
