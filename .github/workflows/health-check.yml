@@ -32,11 +32,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Set environment URLs
+        id: set_urls
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          if [ -z "$ENV" ]; then
+            ENV="production"
+          fi
+          
+          if [ "$ENV" == "staging" ]; then
+            STAGING_URL="${{ secrets.STAGING_URL }}"
+            if [ -z "$STAGING_URL" ]; then
+              STAGING_URL="${{ vars.STAGING_URL }}"
+            fi
+            if [ -z "$STAGING_URL" ]; then
+              STAGING_URL="https://mind-boom-3-0-twilio.vercel.app"
+            fi
+            echo "BASE_URL=$STAGING_URL" >> $GITHUB_ENV
+            echo "HEALTH_URL=$STAGING_URL/health.json" >> $GITHUB_ENV
+          else
+            PROD_URL="${{ secrets.PRODUCTION_URL }}"
+            if [ -z "$PROD_URL" ]; then
+              PROD_URL="${{ vars.PRODUCTION_URL }}"
+            fi
+            if [ -z "$PROD_URL" ]; then
+              PROD_URL="https://mind-boom-3-0-twilio.vercel.app"
+            fi
+            echo "BASE_URL=$PROD_URL" >> $GITHUB_ENV
+            echo "HEALTH_URL=$PROD_URL/health.json" >> $GITHUB_ENV
+          fi
+      
       - name: Check production endpoint
         if: ${{ github.event_name == 'schedule' || github.event.inputs.environment == 'production' }}
         uses: jtalk/url-health-check-action@v3
         with:
-          url: https://example.com/api/health
+          url: ${{ env.HEALTH_URL }}
           follow-redirect: true
           max-attempts: 3
           retry-delay: 5s
@@ -46,7 +76,7 @@ jobs:
         if: ${{ github.event.inputs.environment == 'staging' }}
         uses: jtalk/url-health-check-action@v3
         with:
-          url: https://staging.example.com/api/health
+          url: ${{ env.HEALTH_URL }}
           follow-redirect: true
           max-attempts: 3
           retry-delay: 5s
@@ -57,13 +87,13 @@ jobs:
         env:
           HEALTH_LOG_DIR: ./health-logs
           NODE_ENV: production
-          ENDPOINT_BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'https://staging.example.com' || 'https://example.com' }}
+          ENDPOINT_BASE_URL: ${{ env.BASE_URL }}
       
       - name: Check system integration
         run: |
-          curl -f -s -S -o /dev/null "https://$BASE_URL/api/system/integration-check" || exit 1
+          curl -f -s -S -o /dev/null "$BASE_URL/health.json" || exit 1
         env:
-          BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'staging.example.com' || 'example.com' }}
+          BASE_URL: ${{ env.BASE_URL }}
       
       # New security-specific checks
       - name: Run security checks
@@ -73,15 +103,15 @@ jobs:
         env:
           SECURITY_LOG_DIR: ./security-logs
           NODE_ENV: ${{ github.event.inputs.environment || 'production' }}
-          BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'staging.example.com' || 'example.com' }}
+          BASE_URL: ${{ env.BASE_URL }}
       
       - name: Check for security anomalies
         run: |
           echo "Checking for security anomalies..."
           curl -f -s -S -H "Authorization: Bearer ${{ secrets.SECURITY_MONITOR_TOKEN }}" \
-            "https://$BASE_URL/api/security/anomaly-check" || echo "::warning::Anomaly check failed but continuing"
+            "$BASE_URL/api/security/anomaly-check" || echo "::warning::Anomaly check failed but continuing"
         env:
-          BASE_URL: ${{ github.event.inputs.environment == 'staging' && 'staging.example.com' || 'example.com' }}
+          BASE_URL: ${{ env.BASE_URL }}
       
       - name: Upload health check logs as artifacts
         if: always()  # Upload logs even if checks fail

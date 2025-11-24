@@ -54,8 +54,10 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
   const { deviceState } = useEnhancedDeviceManager();
 
   // Listen for breakout room assignments (for all users, including therapists)
+  // Enable listener as soon as component mounts (on session page), not just when in session
+  // This ensures the listener is ready before any broadcast is sent
   useBreakoutAssignmentListener({
-    enabled: isInSession, // Enable for both therapists and participants
+    enabled: true, // Always enabled when on the session page, not just when isInSession
     onAssigned: (assignment) => {
       console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
     },
