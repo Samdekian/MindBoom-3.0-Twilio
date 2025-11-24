@@ -29,7 +29,10 @@ export function useBreakoutAssignmentListener(
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      console.log('⏸️ [BreakoutAssignmentListener] Disabled, skipping setup');
+      return;
+    }
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cleanupStarted = false;
@@ -42,15 +45,19 @@ export function useBreakoutAssignmentListener(
         return;
       }
 
-      console.log('📡 [BreakoutAssignmentListener] Setting up listener for user:', user.id);
+      console.log('📡 [BreakoutAssignmentListener] Setting up listener for user:', user.id, 'Channel: user:' + user.id + ':breakout');
 
       // Create a channel to listen for breakout assignments
       channel = supabase.channel(`user:${user.id}:breakout`);
       
       channel
         .on('broadcast', { event: 'breakout_assignment' }, async (payload) => {
-          if (cleanupStarted) return;
+          if (cleanupStarted) {
+            console.log('🧹 [BreakoutAssignmentListener] Ignoring message, cleanup started');
+            return;
+          }
 
+          console.log('📨 [BreakoutAssignmentListener] Received broadcast event:', payload);
           const assignment: BreakoutAssignmentPayload = payload.payload;
           
           console.log('📢 [BreakoutAssignmentListener] Received breakout assignment:', assignment);

@@ -452,24 +452,46 @@ export class BreakoutRoomManager {
         
         const channel = supabase.channel(`user:${participant.user_id}:breakout`);
         
-        await channel.subscribe(async (status) => {
-          if (status === 'SUBSCRIBED') {
-            await channel.send({
-              type: 'broadcast',
-              event: 'breakout_assignment',
-              payload: {
-                room_id: request.to_room_id,
-                room_name: room.room_name,
-                twilio_room_sid: room.twilio_room_sid,
-                action: 'join'
-              }
-            });
-            
-            console.log('✅ [BreakoutManager] Breakout assignment sent');
-            
-            // Unsubscribe after sending
-            await supabase.removeChannel(channel);
-          }
+        // Subscribe and wait for connection
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Channel subscription timeout'));
+          }, 5000);
+          
+          channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+              clearTimeout(timeout);
+              
+              // Wait a moment to ensure receiver is ready
+              await new Promise(resolve => setTimeout(resolve, 200));
+              
+              const sendResult = await channel.send({
+                type: 'broadcast',
+                event: 'breakout_assignment',
+                payload: {
+                  room_id: request.to_room_id,
+                  room_name: room.room_name,
+                  twilio_room_sid: room.twilio_room_sid,
+                  action: 'join'
+                }
+              });
+              
+              console.log('✅ [BreakoutManager] Breakout assignment sent:', sendResult);
+              
+              // Wait a bit before cleanup to ensure message delivery
+              setTimeout(async () => {
+                await supabase.removeChannel(channel);
+                resolve();
+              }, 500);
+            } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+              clearTimeout(timeout);
+              reject(new Error(`Channel error: ${status}`));
+            }
+          });
+        }).catch((error) => {
+          console.error('❌ [BreakoutManager] Failed to send breakout assignment:', error);
+          // Still try to remove the channel
+          supabase.removeChannel(channel).catch(() => {});
         });
       }
 
