@@ -140,6 +140,6 @@ export function useBreakoutAssignmentListener(
         channel = null;
       }
     };
-  }, [enabled, onAssigned, disconnectFromMainSession, toast]);
+  }, [enabled]); // Only re-run when enabled changes, not on every callback change
 }
 

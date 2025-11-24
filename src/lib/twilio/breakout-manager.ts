@@ -450,49 +450,69 @@ export class BreakoutRoomManager {
       if (participant.user_id) {
         console.log('📢 [BreakoutManager] Sending breakout assignment to user:', participant.user_id);
         
-        const channel = supabase.channel(`user:${participant.user_id}:breakout`);
+        // Use a unique channel name for sending to avoid conflicts with listener
+        const channelName = `user:${participant.user_id}:breakout`;
+        const channel = supabase.channel(channelName);
         
-        // Subscribe and wait for connection
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('Channel subscription timeout'));
-          }, 5000);
-          
-          channel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-              clearTimeout(timeout);
+        try {
+          // Subscribe and wait for connection
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              console.error('⏱️ [BreakoutManager] Channel subscription timeout');
+              reject(new Error('Channel subscription timeout'));
+            }, 5000);
+            
+            channel.subscribe(async (status) => {
+              console.log(`📡 [BreakoutManager] Channel status: ${status}`);
               
-              // Wait a moment to ensure receiver is ready
-              await new Promise(resolve => setTimeout(resolve, 200));
-              
-              const sendResult = await channel.send({
-                type: 'broadcast',
-                event: 'breakout_assignment',
-                payload: {
-                  room_id: request.to_room_id,
-                  room_name: room.room_name,
-                  twilio_room_sid: room.twilio_room_sid,
-                  action: 'join'
+              if (status === 'SUBSCRIBED') {
+                clearTimeout(timeout);
+                
+                try {
+                  // Send the broadcast message
+                  const sendResult = await channel.send({
+                    type: 'broadcast',
+                    event: 'breakout_assignment',
+                    payload: {
+                      room_id: request.to_room_id,
+                      room_name: room.room_name,
+                      twilio_room_sid: room.twilio_room_sid,
+                      action: 'join'
+                    }
+                  });
+                  
+                  console.log('✅ [BreakoutManager] Breakout assignment sent:', sendResult);
+                  
+                  // Wait longer to ensure message delivery before cleanup
+                  setTimeout(async () => {
+                    console.log('🧹 [BreakoutManager] Cleaning up sender channel');
+                    await supabase.removeChannel(channel);
+                    resolve();
+                  }, 1000); // Increased from 500ms to 1000ms
+                  
+                } catch (sendError) {
+                  clearTimeout(timeout);
+                  console.error('❌ [BreakoutManager] Failed to send message:', sendError);
+                  reject(sendError);
                 }
-              });
-              
-              console.log('✅ [BreakoutManager] Breakout assignment sent:', sendResult);
-              
-              // Wait a bit before cleanup to ensure message delivery
-              setTimeout(async () => {
-                await supabase.removeChannel(channel);
-                resolve();
-              }, 500);
-            } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-              clearTimeout(timeout);
-              reject(new Error(`Channel error: ${status}`));
-            }
+              } else if (status === 'CHANNEL_ERROR') {
+                clearTimeout(timeout);
+                console.error('❌ [BreakoutManager] Channel error');
+                reject(new Error(`Channel error: ${status}`));
+              } else if (status === 'CLOSED') {
+                console.warn('⚠️ [BreakoutManager] Channel closed unexpectedly');
+              }
+            });
           });
-        }).catch((error) => {
+        } catch (error) {
           console.error('❌ [BreakoutManager] Failed to send breakout assignment:', error);
-          // Still try to remove the channel
-          supabase.removeChannel(channel).catch(() => {});
-        });
+          // Ensure cleanup even on error
+          try {
+            await supabase.removeChannel(channel);
+          } catch (cleanupError) {
+            console.error('❌ [BreakoutManager] Failed to cleanup channel:', cleanupError);
+          }
+        }
       }
 
       // Record the transition
