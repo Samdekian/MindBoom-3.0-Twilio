@@ -191,10 +191,10 @@ export class BreakoutRoomManager {
         max_participants: request.max_participants
       });
       
-      // Call edge function to create room in Twilio and database
-      const { data, error } = await supabase.functions.invoke('create-breakout-room', {
-        body: request
-      });
+    // Call edge function to create room in Twilio and database
+    const { data, error } = await supabase.functions.invoke('create-breakout-room', {
+      body: request
+    });
 
       if (error) {
         console.error('❌ [BreakoutManager] Edge function error:', error);
@@ -247,7 +247,7 @@ export class BreakoutRoomManager {
       }
 
       console.log('✅ [BreakoutManager] Room created successfully:', data.breakout_room.id);
-      return data.breakout_room;
+    return data.breakout_room;
     } catch (error) {
       console.error('❌ [BreakoutManager] createSingleRoom failed:', {
         error,
@@ -322,7 +322,7 @@ export class BreakoutRoomManager {
           'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || ''
         },
         body: JSON.stringify({
-          session_id: this.sessionId,
+        session_id: this.sessionId,
           assignments
         })
       });
@@ -450,7 +450,7 @@ export class BreakoutRoomManager {
       if (participant.user_id) {
         console.log('📢 [BreakoutManager] Sending breakout assignment to user:', participant.user_id);
         
-        // Use a unique channel name for sending to avoid conflicts with listener
+        // Use the same channel name that the listener uses
         const channelName = `user:${participant.user_id}:breakout`;
         const channel = supabase.channel(channelName);
         
@@ -460,7 +460,7 @@ export class BreakoutRoomManager {
             const timeout = setTimeout(() => {
               console.error('⏱️ [BreakoutManager] Channel subscription timeout');
               reject(new Error('Channel subscription timeout'));
-            }, 5000);
+            }, 10000); // Increased timeout to 10 seconds
             
             channel.subscribe(async (status) => {
               console.log(`📡 [BreakoutManager] Channel status: ${status}`);
@@ -469,6 +469,10 @@ export class BreakoutRoomManager {
                 clearTimeout(timeout);
                 
                 try {
+                  // Wait a moment to ensure receiver is subscribed and ready
+                  console.log('⏳ [BreakoutManager] Waiting for receiver to be ready...');
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  
                   // Send the broadcast message
                   const sendResult = await channel.send({
                     type: 'broadcast',
@@ -483,34 +487,59 @@ export class BreakoutRoomManager {
                   
                   console.log('✅ [BreakoutManager] Breakout assignment sent:', sendResult);
                   
-                  // Wait longer to ensure message delivery before cleanup
+                  // Wait much longer to ensure message delivery before cleanup
+                  // Keep channel open for 3 seconds to ensure delivery
                   setTimeout(async () => {
-                    console.log('🧹 [BreakoutManager] Cleaning up sender channel');
-                    await supabase.removeChannel(channel);
+                    console.log('🧹 [BreakoutManager] Cleaning up sender channel after delivery');
+                    try {
+                      await supabase.removeChannel(channel);
+                    } catch (cleanupError) {
+                      console.warn('⚠️ [BreakoutManager] Error during channel cleanup (non-critical):', cleanupError);
+                    }
                     resolve();
-                  }, 1000); // Increased from 500ms to 1000ms
+                  }, 3000); // Increased from 1000ms to 3000ms
                   
                 } catch (sendError) {
                   clearTimeout(timeout);
                   console.error('❌ [BreakoutManager] Failed to send message:', sendError);
-                  reject(sendError);
+                  // Don't reject - just log the error and continue
+                  // The participant might still receive it via other means
+                  setTimeout(() => {
+                    try {
+                      supabase.removeChannel(channel);
+                    } catch (e) {
+                      // Ignore cleanup errors
+                    }
+                    resolve();
+                  }, 1000);
                 }
               } else if (status === 'CHANNEL_ERROR') {
                 clearTimeout(timeout);
-                console.error('❌ [BreakoutManager] Channel error');
-                reject(new Error(`Channel error: ${status}`));
+                console.error('❌ [BreakoutManager] Channel error:', status);
+                // Don't reject - just log and continue
+                setTimeout(() => {
+                  try {
+                    supabase.removeChannel(channel);
+                  } catch (e) {
+                    // Ignore cleanup errors
+                  }
+                  resolve();
+                }, 100);
               } else if (status === 'CLOSED') {
-                console.warn('⚠️ [BreakoutManager] Channel closed unexpectedly');
+                console.warn('⚠️ [BreakoutManager] Channel closed unexpectedly - message may not be delivered');
+                // Don't reject - channel might have closed after sending
+                setTimeout(() => resolve(), 100);
               }
             });
           });
         } catch (error) {
           console.error('❌ [BreakoutManager] Failed to send breakout assignment:', error);
-          // Ensure cleanup even on error
+          // Don't throw - just log the error
+          // Try to cleanup channel if it exists
           try {
             await supabase.removeChannel(channel);
           } catch (cleanupError) {
-            console.error('❌ [BreakoutManager] Failed to cleanup channel:', cleanupError);
+            // Ignore cleanup errors
           }
         }
       }
