@@ -86,15 +86,22 @@ serve(async (req) => {
     if (roomName.startsWith('RM')) {
       console.log("🎥 [twilio-video-token] Checking breakout room:", roomName);
       
+      // First, check if the breakout room exists (without join to avoid issues)
       const { data: breakoutRoom, error: breakoutError } = await supabase
         .from('breakout_rooms')
-        .select('id, session_id, is_active, instant_sessions!inner(therapist_id, host_user_id)')
+        .select('id, session_id, is_active, twilio_room_sid')
         .eq('twilio_room_sid', roomName)
         .eq('is_active', true)
         .single();
 
       if (breakoutError || !breakoutRoom) {
-        console.error("❌ [twilio-video-token] Breakout room not found:", breakoutError);
+        console.error("❌ [twilio-video-token] Breakout room not found:", {
+          error: breakoutError,
+          roomName,
+          errorCode: breakoutError?.code,
+          errorMessage: breakoutError?.message,
+          errorDetails: breakoutError?.details
+        });
         return new Response(
           JSON.stringify({ error: 'Breakout room not found or inactive' }),
           { 
@@ -104,11 +111,37 @@ serve(async (req) => {
         );
       }
 
-      // For breakout rooms, allow both therapist and participants
-      const mainSession = (breakoutRoom as any).instant_sessions;
-      
+      console.log("✅ [twilio-video-token] Breakout room found:", {
+        roomId: breakoutRoom.id,
+        sessionId: breakoutRoom.session_id,
+        isActive: breakoutRoom.is_active
+      });
+
+      // Then, fetch the session separately to check authorization
+      const { data: session, error: sessionError } = await supabase
+        .from('instant_sessions')
+        .select('therapist_id, host_user_id')
+        .eq('id', breakoutRoom.session_id)
+        .single();
+
+      if (sessionError || !session) {
+        console.error("❌ [twilio-video-token] Session not found for breakout room:", {
+          error: sessionError,
+          sessionId: breakoutRoom.session_id,
+          errorCode: sessionError?.code,
+          errorMessage: sessionError?.message
+        });
+        return new Response(
+          JSON.stringify({ error: 'Session not found for breakout room' }),
+          { 
+            status: 404, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+
       // Check if user is therapist
-      const isTherapist = mainSession.therapist_id === user.id || mainSession.host_user_id === user.id;
+      const isTherapist = session.therapist_id === user.id || session.host_user_id === user.id;
       
       // Check if user is participant in the session
       const { data: participantData } = await supabase
@@ -123,7 +156,14 @@ serve(async (req) => {
       const isAuthorized = isTherapist || isParticipant;
 
       if (!isAuthorized) {
-        console.error("❌ [twilio-video-token] User not authorized for breakout room");
+        console.error("❌ [twilio-video-token] User not authorized for breakout room:", {
+          userId: user.id,
+          isTherapist,
+          isParticipant,
+          sessionId: breakoutRoom.session_id,
+          therapistId: session.therapist_id,
+          hostUserId: session.host_user_id
+        });
         return new Response(
           JSON.stringify({ error: 'Not authorized to join this breakout room' }),
           { 
