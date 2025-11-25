@@ -348,6 +348,105 @@ export class BreakoutRoomManager {
       }
 
       console.log('✅ [BreakoutManager] Auto-assigned participants:', responseData.assigned_count || 0);
+      
+      // Send broadcasts to notify all assigned participants
+      console.log('📢 [BreakoutManager] Sending auto-assignment broadcasts to participants...');
+      
+      // Send broadcasts in parallel (but with delays to avoid overwhelming)
+      const broadcastPromises = assignments.map(async (assignment, index) => {
+        if (!assignment.user_id) {
+          console.log(`⚠️ [BreakoutManager] Skipping broadcast for participant ${assignment.participant_id} (no user_id)`);
+          return;
+        }
+        
+        // Stagger broadcasts slightly to avoid overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, index * 100));
+        
+        try {
+          // Get the room details
+          const room = rooms.find(r => r.id === assignment.breakout_room_id);
+          if (!room) {
+            console.warn(`⚠️ [BreakoutManager] Room not found for assignment: ${assignment.breakout_room_id}`);
+            return;
+          }
+          
+          // Send broadcast notification using the same logic as moveParticipant
+          const channelName = `user:${assignment.user_id}:breakout`;
+          const channel = supabase.channel(channelName);
+          
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              console.error(`⏱️ [BreakoutManager] Channel subscription timeout for user: ${assignment.user_id}`);
+              reject(new Error('Channel subscription timeout'));
+            }, 10000);
+            
+            channel.subscribe(async (status) => {
+              if (status === 'SUBSCRIBED') {
+                clearTimeout(timeout);
+                
+                try {
+                  // Wait for receiver to be ready
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  
+                  // Send broadcast
+                  const sendResult = await channel.send({
+                    type: 'broadcast',
+                    event: 'breakout_assignment',
+                    payload: {
+                      room_id: assignment.breakout_room_id,
+                      room_name: room.room_name,
+                      twilio_room_sid: room.twilio_room_sid,
+                      action: 'join'
+                    }
+                  });
+                  
+                  console.log(`✅ [BreakoutManager] Auto-assignment broadcast sent to user: ${assignment.user_id}`, sendResult);
+                  
+                  // Keep channel alive for delivery
+                  setTimeout(async () => {
+                    try {
+                      await supabase.removeChannel(channel);
+                    } catch (cleanupError) {
+                      console.warn(`⚠️ [BreakoutManager] Error cleaning up channel for ${assignment.user_id}:`, cleanupError);
+                    }
+                    resolve();
+                  }, 3000);
+                  
+                } catch (sendError) {
+                  clearTimeout(timeout);
+                  console.error(`❌ [BreakoutManager] Failed to send broadcast to ${assignment.user_id}:`, sendError);
+                  reject(sendError);
+                }
+              } else if (status === 'CHANNEL_ERROR') {
+                clearTimeout(timeout);
+                console.error(`❌ [BreakoutManager] Channel error for user: ${assignment.user_id}`);
+                reject(new Error(`Channel error: ${status}`));
+              } else if (status === 'CLOSED') {
+                console.warn(`⚠️ [BreakoutManager] Channel closed for user: ${assignment.user_id}`);
+              }
+            });
+          }).catch((error) => {
+            console.error(`❌ [BreakoutManager] Failed to send auto-assignment broadcast to ${assignment.user_id}:`, error);
+            // Don't throw - continue with other participants
+          });
+          
+        } catch (error) {
+          console.error(`❌ [BreakoutManager] Error sending broadcast to ${assignment.user_id}:`, error);
+          // Continue with other participants
+        }
+      });
+      
+      // Wait for all broadcasts to complete (but don't fail if some fail)
+      await Promise.allSettled(broadcastPromises);
+      
+      console.log('✅ [BreakoutManager] Auto-assignment broadcasts completed');
+      
+      // Emit event for UI refresh
+      this.emitEvent({
+        type: 'participants_assigned',
+        count: responseData.assigned_count || assignments.length
+      });
+      
     } catch (fetchError: any) {
       // If it's already our Error, rethrow it
       if (fetchError.message?.includes('Failed to assign participants')) {
