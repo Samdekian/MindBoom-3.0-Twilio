@@ -82,6 +82,9 @@ serve(async (req) => {
       );
     }
 
+    // Track the session UUID for analytics logging (for breakout rooms)
+    let effectiveSessionId: string | null = null;
+
     // Check if this is a breakout room Twilio SID (starts with RM)
     if (roomName.startsWith('RM')) {
       console.log("🎥 [twilio-video-token] Checking breakout room:", roomName);
@@ -118,9 +121,10 @@ serve(async (req) => {
       });
 
       // Then, fetch the session separately to check authorization
+      // Use select('*') to get all columns, including optional host_user_id
       const { data: session, error: sessionError } = await supabase
         .from('instant_sessions')
-        .select('therapist_id, host_user_id')
+        .select('*')
         .eq('id', breakoutRoom.session_id)
         .single();
 
@@ -129,7 +133,9 @@ serve(async (req) => {
           error: sessionError,
           sessionId: breakoutRoom.session_id,
           errorCode: sessionError?.code,
-          errorMessage: sessionError?.message
+          errorMessage: sessionError?.message,
+          errorDetails: sessionError?.details,
+          errorHint: sessionError?.hint
         });
         return new Response(
           JSON.stringify({ error: 'Session not found for breakout room' }),
@@ -140,29 +146,59 @@ serve(async (req) => {
         );
       }
 
-      // Check if user is therapist
-      const isTherapist = session.therapist_id === user.id || session.host_user_id === user.id;
+      // Store session ID for analytics
+      effectiveSessionId = breakoutRoom.session_id;
+
+      // Check if user is therapist (host_user_id is optional, may not exist in all schemas)
+      const hostUserId = (session as any).host_user_id ?? null;
+      const isTherapist = session.therapist_id === user.id || hostUserId === user.id;
       
-      // Check if user is participant in the session
+      // Check if user is participant in the session (may have is_active=false when in breakout)
       const { data: participantData } = await supabase
         .from('instant_session_participants')
         .select('id')
         .eq('session_id', breakoutRoom.session_id)
         .eq('user_id', user.id)
-        .eq('is_active', true)
-        .maybeSingle();
+        .maybeSingle(); // Don't filter by is_active - participant may be in breakout
       
-      const isParticipant = !!participantData;
-      const isAuthorized = isTherapist || isParticipant;
+      const isSessionParticipant = !!participantData;
+      
+      // Check if user is assigned to THIS breakout room
+      let isAssignedToRoom = false;
+      if (participantData?.id) {
+        const { data: breakoutAssignment } = await supabase
+          .from('breakout_room_participants')
+          .select('id')
+          .eq('breakout_room_id', breakoutRoom.id)
+          .eq('participant_id', participantData.id)
+          .eq('is_active', true)
+          .maybeSingle();
+        
+        isAssignedToRoom = !!breakoutAssignment;
+      }
+      
+      // User is authorized if: therapist, or assigned to this breakout room, or session participant
+      const isAuthorized = isTherapist || isAssignedToRoom || isSessionParticipant;
+
+      console.log("🔐 [twilio-video-token] Authorization check:", {
+        userId: user.id,
+        isTherapist,
+        isSessionParticipant,
+        isAssignedToRoom,
+        isAuthorized,
+        breakoutRoomId: breakoutRoom.id,
+        participantId: participantData?.id
+      });
 
       if (!isAuthorized) {
         console.error("❌ [twilio-video-token] User not authorized for breakout room:", {
           userId: user.id,
           isTherapist,
-          isParticipant,
+          isSessionParticipant,
+          isAssignedToRoom,
           sessionId: breakoutRoom.session_id,
           therapistId: session.therapist_id,
-          hostUserId: session.host_user_id
+          hostUserId: hostUserId
         });
         return new Response(
           JSON.stringify({ error: 'Not authorized to join this breakout room' }),
@@ -186,9 +222,10 @@ serve(async (req) => {
 
     } else {
       // Original logic for main sessions
+      // Use select('*') to get all columns, including optional host_user_id
       const { data: session, error: sessionError } = await supabase
         .from('instant_sessions')
-        .select('therapist_id, host_user_id')
+        .select('*')
         .or(`session_token.eq.${roomName},id.eq.${roomName}`)
         .single();
 
@@ -203,8 +240,9 @@ serve(async (req) => {
         );
       }
 
-      // Only therapist can generate tokens for main sessions
-      const isTherapist = session.therapist_id === user.id || session.host_user_id === user.id;
+      // Only therapist can generate tokens for main sessions (host_user_id is optional)
+      const hostUserId = (session as any).host_user_id ?? null;
+      const isTherapist = session.therapist_id === user.id || hostUserId === user.id;
 
       if (!isTherapist) {
         console.error("❌ [twilio-video-token] User not authorized for session");
@@ -230,6 +268,9 @@ serve(async (req) => {
         console.warn("⚠️ [twilio-video-token] Identity mismatch, using expected identity");
         identity = expectedIdentity;
       }
+
+      // Store session ID for analytics (main session)
+      effectiveSessionId = session.id;
 
       console.log(`🎥 [twilio-video-token] Generating token for user: ${identity}, room: ${roomName}`);
     }
@@ -290,14 +331,18 @@ serve(async (req) => {
     console.log("✅ [twilio-video-token] Token generated successfully");
 
     // Log token generation for audit
+    // Use effectiveSessionId if available (for breakout rooms), otherwise roomName
+    const analyticsSessionId = effectiveSessionId || roomName;
     await supabase.from('session_analytics_events').insert({
-      session_id: roomName,
+      session_id: analyticsSessionId,
       event_type: 'token_generated',
       user_id: user.id,
       participant_name: identity,
       metadata: {
         room_name: roomName,
-        token_expiry: new Date(expiry * 1000).toISOString()
+        token_expiry: new Date(expiry * 1000).toISOString(),
+        is_breakout_room: roomName.startsWith('RM'),
+        breakout_session_id: effectiveSessionId || null
       }
     });
 

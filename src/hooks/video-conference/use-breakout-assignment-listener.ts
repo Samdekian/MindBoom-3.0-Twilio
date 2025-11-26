@@ -23,7 +23,7 @@ interface UseBreakoutAssignmentListenerOptions {
   sessionId?: string;
   onAssigned?: (payload: BreakoutAssignmentPayload) => void;
   disconnectFromMainSession?: () => Promise<void>;
-  pollingInterval?: number; // ms, default 5000
+  pollingInterval?: number; // ms, default 30000 (30 seconds)
 }
 
 interface UseBreakoutAssignmentListenerReturn {
@@ -34,6 +34,11 @@ interface UseBreakoutAssignmentListenerReturn {
   leaveBreakoutRoom: () => Promise<void>;
 }
 
+// Max consecutive errors before stopping polling
+const MAX_CONSECUTIVE_ERRORS = 3;
+// Base backoff delay after error (doubles each time)
+const BASE_ERROR_BACKOFF_MS = 10000;
+
 export function useBreakoutAssignmentListener(
   options: UseBreakoutAssignmentListenerOptions = {}
 ): UseBreakoutAssignmentListenerReturn {
@@ -42,7 +47,7 @@ export function useBreakoutAssignmentListener(
     sessionId,
     onAssigned, 
     disconnectFromMainSession,
-    pollingInterval = 5000
+    pollingInterval = 30000 // Increased from 5000 to 30000 (30 seconds)
   } = options;
   const { toast } = useToast();
 
@@ -52,16 +57,32 @@ export function useBreakoutAssignmentListener(
   const [currentRoomName, setCurrentRoomName] = useState<string | null>(null);
 
   const lastCheckedAssignmentRef = useRef<string | null>(null);
+  const failedAssignmentsRef = useRef<Set<string>>(new Set()); // Track failed assignments
+  const consecutiveErrorsRef = useRef(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const userIdRef = useRef<string | null>(null);
   const cleanupStartedRef = useRef(false);
+  const isJoiningRef = useRef(false); // Prevent concurrent join attempts
 
   /**
    * Join a breakout room
    */
   const joinBreakoutRoom = useCallback(async (assignment: BreakoutAssignmentPayload) => {
-    if (cleanupStartedRef.current) return;
+    // Prevent concurrent join attempts or joining after cleanup
+    if (cleanupStartedRef.current || isJoiningRef.current) {
+      console.log('⏸️ [BreakoutAssignmentListener] Skipping join (cleanup or already joining)');
+      return;
+    }
 
+    const assignmentKey = assignment.room_id;
+    
+    // Don't retry failed assignments
+    if (failedAssignmentsRef.current.has(assignmentKey)) {
+      console.log('⏸️ [BreakoutAssignmentListener] Skipping previously failed assignment:', assignmentKey);
+      return;
+    }
+
+    isJoiningRef.current = true;
     console.log('🚀 [BreakoutAssignmentListener] Joining breakout room:', assignment);
 
     try {
@@ -101,6 +122,9 @@ export function useBreakoutAssignmentListener(
 
       console.log('✅ [BreakoutAssignmentListener] Connected to breakout room:', room.sid);
 
+      // Reset error counter on success
+      consecutiveErrorsRef.current = 0;
+
       // Update state
       setCurrentBreakoutRoom(room);
       setCurrentRoomId(assignment.room_id);
@@ -120,11 +144,30 @@ export function useBreakoutAssignmentListener(
     } catch (error: any) {
       console.error('❌ [BreakoutAssignmentListener] Failed to join breakout room:', error);
       
-      toast({
-        title: 'Failed to join breakout room',
-        description: error.message || 'Please try joining manually',
-        variant: 'destructive'
-      });
+      // Mark this assignment as failed to prevent retrying
+      failedAssignmentsRef.current.add(assignmentKey);
+      lastCheckedAssignmentRef.current = assignmentKey; // Prevent polling from retrying
+      consecutiveErrorsRef.current += 1;
+      
+      // Only show toast on first failure for this assignment
+      if (!failedAssignmentsRef.current.has(assignmentKey)) {
+        toast({
+          title: 'Failed to join breakout room',
+          description: error.message || 'Please try joining manually',
+          variant: 'destructive'
+        });
+      }
+      
+      // Stop polling if too many consecutive errors
+      if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+        console.warn('⚠️ [BreakoutAssignmentListener] Too many errors, stopping polling');
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      }
+    } finally {
+      isJoiningRef.current = false;
     }
   }, [disconnectFromMainSession, onAssigned, toast]);
 
@@ -138,11 +181,17 @@ export function useBreakoutAssignmentListener(
       const roomManager = getRoomManager();
       roomManager.disconnect();
 
+      // Clear the current room from failed list so it can be rejoined
+      if (currentRoomId) {
+        failedAssignmentsRef.current.delete(currentRoomId);
+      }
+
       setCurrentBreakoutRoom(null);
       setCurrentRoomId(null);
       setCurrentRoomName(null);
       setIsInBreakoutRoom(false);
       lastCheckedAssignmentRef.current = null;
+      consecutiveErrorsRef.current = 0; // Reset error counter
 
       toast({
         title: 'Left breakout room',
@@ -151,21 +200,28 @@ export function useBreakoutAssignmentListener(
     } catch (error: any) {
       console.error('❌ [BreakoutAssignmentListener] Error leaving breakout room:', error);
     }
-  }, [toast]);
+  }, [currentRoomId, toast]);
 
   /**
    * Poll database for assignment changes (fallback for broadcast)
    */
   const checkForAssignment = useCallback(async () => {
-    if (cleanupStartedRef.current || !userIdRef.current) return;
+    // Skip if cleanup started, no user, already joining, or too many errors
+    if (cleanupStartedRef.current || !userIdRef.current || isJoiningRef.current) {
+      return;
+    }
+    
+    if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+      console.log('⏸️ [BreakoutAssignmentListener] Polling paused due to errors');
+      return;
+    }
 
     try {
-      // Get current user's participant record
+      // Get current user's participant record (don't filter by is_active - may be in breakout)
       const { data: participant } = await supabase
         .from('instant_session_participants')
         .select('id')
         .eq('user_id', userIdRef.current)
-        .eq('is_active', true)
         .maybeSingle();
 
       if (!participant) return;
@@ -188,17 +244,26 @@ export function useBreakoutAssignmentListener(
 
       if (error) {
         console.error('❌ [BreakoutAssignmentListener] Poll error:', error);
+        consecutiveErrorsRef.current += 1;
         return;
       }
+
+      // Reset error counter on successful query
+      consecutiveErrorsRef.current = 0;
 
       // Check if there's an assignment we haven't processed
       const breakoutRoom = (assignment as any)?.breakout_rooms;
       
       if (assignment && breakoutRoom?.is_active && breakoutRoom?.twilio_room_sid) {
-        const assignmentKey = `${assignment.breakout_room_id}`;
+        const assignmentKey = breakoutRoom.id;
         
-        // Only process if it's a new assignment
-        if (lastCheckedAssignmentRef.current !== assignmentKey && !isInBreakoutRoom) {
+        // Skip if already processed, already failed, or already in this room
+        if (lastCheckedAssignmentRef.current === assignmentKey) return;
+        if (failedAssignmentsRef.current.has(assignmentKey)) return;
+        if (isInBreakoutRoom && currentRoomId === assignmentKey) return;
+        
+        // Only process if not currently in a breakout room
+        if (!isInBreakoutRoom) {
           console.log('📡 [BreakoutAssignmentListener] Found assignment via polling:', breakoutRoom);
           
           lastCheckedAssignmentRef.current = assignmentKey;
@@ -217,8 +282,9 @@ export function useBreakoutAssignmentListener(
       }
     } catch (error) {
       console.error('❌ [BreakoutAssignmentListener] Poll check failed:', error);
+      consecutiveErrorsRef.current += 1;
     }
-  }, [isInBreakoutRoom, joinBreakoutRoom, leaveBreakoutRoom]);
+  }, [isInBreakoutRoom, currentRoomId, joinBreakoutRoom, leaveBreakoutRoom]);
 
   /**
    * Setup broadcast listener and polling
@@ -294,6 +360,11 @@ export function useBreakoutAssignmentListener(
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
+
+      // Reset state refs on cleanup
+      failedAssignmentsRef.current.clear();
+      consecutiveErrorsRef.current = 0;
+      isJoiningRef.current = false;
     };
   }, [enabled, pollingInterval, joinBreakoutRoom, leaveBreakoutRoom, checkForAssignment]);
 
