@@ -21,6 +21,8 @@ import { useTherapistRoomSwitching } from '@/hooks/video-conference/use-therapis
 import { useAuthRBAC } from '@/contexts/AuthRBACContext';
 import { supabase } from '@/integrations/supabase/client';
 import TwilioVideoGrid from '../breakout/TwilioVideoGrid';
+import { getRoomManager } from '@/lib/twilio/room-manager';
+import type { Room } from 'twilio-video';
 
 interface GroupSessionContainerProps {
   sessionId: string;
@@ -67,6 +69,24 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     isTherapist: isTherapist || false
   });
 
+  // Track Twilio room for therapist (from room manager)
+  const [therapistTwilioRoom, setTherapistTwilioRoom] = useState<Room | null>(null);
+  
+  // Update therapist Twilio room when they switch rooms
+  useEffect(() => {
+    if (isTherapist && therapistRoomSwitching.currentRoomId) {
+      // Get the Twilio room from the singleton room manager
+      const roomManager = getRoomManager();
+      const room = roomManager.getRoom();
+      setTherapistTwilioRoom(room);
+      console.log('🎥 [GroupSessionContainer] Therapist Twilio room updated:', room?.sid);
+    } else if (isTherapist && !therapistRoomSwitching.currentRoomId) {
+      // Therapist left breakout room
+      setTherapistTwilioRoom(null);
+      console.log('🏠 [GroupSessionContainer] Therapist returned to main session');
+    }
+  }, [isTherapist, therapistRoomSwitching.currentRoomId]);
+
   // Listen for breakout room assignments (for participants)
   // This hook now manages the Twilio room connection and state
   const {
@@ -93,8 +113,9 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     ? therapistRoomSwitching.currentRoomId !== null 
     : participantInBreakoutRoom;
   
+  // Get the Twilio Room object for rendering (works for both therapist and participants)
   const currentBreakoutRoom = isTherapist 
-    ? null // Therapist room is managed separately via therapistRoomSwitching
+    ? therapistTwilioRoom // Use the actual Twilio Room for therapist
     : participantBreakoutRoom;
   
   const currentRoomId = isTherapist 
