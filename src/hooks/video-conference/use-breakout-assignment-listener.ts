@@ -60,9 +60,11 @@ export function useBreakoutAssignmentListener(
   const failedAssignmentsRef = useRef<Set<string>>(new Set()); // Track failed assignments
   const consecutiveErrorsRef = useRef(0);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const fastPollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Fast polling for first 30 seconds
   const userIdRef = useRef<string | null>(null);
   const cleanupStartedRef = useRef(false);
   const isJoiningRef = useRef(false); // Prevent concurrent join attempts
+  const setupTimeRef = useRef<number>(0); // Track when setup started for fast polling
 
   /**
    * Join a breakout room
@@ -336,7 +338,28 @@ export function useBreakoutAssignmentListener(
         });
 
       // 2. Setup polling (fallback)
-      console.log('⏱️ [BreakoutAssignmentListener] Starting polling fallback');
+      setupTimeRef.current = Date.now();
+      
+      // Fast polling for first 30 seconds (every 3 seconds)
+      const FAST_POLLING_INTERVAL = 3000;
+      const FAST_POLLING_DURATION = 30000;
+      
+      console.log('⚡ [BreakoutAssignmentListener] Starting fast polling (3s intervals for 30s)');
+      fastPollingIntervalRef.current = setInterval(() => {
+        if (Date.now() - setupTimeRef.current >= FAST_POLLING_DURATION) {
+          // Switch to slow polling after 30 seconds
+          if (fastPollingIntervalRef.current) {
+            clearInterval(fastPollingIntervalRef.current);
+            fastPollingIntervalRef.current = null;
+            console.log('⏱️ [BreakoutAssignmentListener] Switching to slow polling');
+          }
+        } else {
+          checkForAssignment();
+        }
+      }, FAST_POLLING_INTERVAL);
+      
+      // Slow polling (normal interval - 30 seconds)
+      console.log('⏱️ [BreakoutAssignmentListener] Starting slow polling fallback');
       pollingIntervalRef.current = setInterval(checkForAssignment, pollingInterval);
       
       // Initial check
@@ -355,8 +378,14 @@ export function useBreakoutAssignmentListener(
         channel = null;
       }
 
+      if (fastPollingIntervalRef.current) {
+        console.log('🧹 [BreakoutAssignmentListener] Stopping fast polling');
+        clearInterval(fastPollingIntervalRef.current);
+        fastPollingIntervalRef.current = null;
+      }
+
       if (pollingIntervalRef.current) {
-        console.log('🧹 [BreakoutAssignmentListener] Stopping polling');
+        console.log('🧹 [BreakoutAssignmentListener] Stopping slow polling');
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }

@@ -402,7 +402,7 @@ export class BreakoutRoomManager {
                   
                   console.log(`✅ [BreakoutManager] Auto-assignment broadcast sent to user: ${assignment.user_id}`, sendResult);
                   
-                  // Keep channel alive for delivery
+                  // Keep channel alive longer for delivery (increased from 3s to 15s)
                   setTimeout(async () => {
                     try {
                       await supabase.removeChannel(channel);
@@ -410,7 +410,7 @@ export class BreakoutRoomManager {
                       console.warn(`⚠️ [BreakoutManager] Error cleaning up channel for ${assignment.user_id}:`, cleanupError);
                     }
                     resolve();
-                  }, 3000);
+                  }, 15000);
                   
                 } catch (sendError) {
                   clearTimeout(timeout);
