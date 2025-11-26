@@ -15,6 +15,10 @@ import ParticipantsList from './ParticipantsList';
 import { useInstantSessionParticipants, type InstantSessionParticipant } from '@/hooks/video-conference/use-instant-session-participants';
 import BreakoutRoomManager from '../breakout/BreakoutRoomManager';
 import { useBreakoutAssignmentListener } from '@/hooks/video-conference/use-breakout-assignment-listener';
+import { useBreakoutRoomFilter } from '@/hooks/video-conference/use-breakout-room-filter';
+import { useTherapistRoomSwitching } from '@/hooks/video-conference/use-therapist-room-switching';
+import { useAuthRBAC } from '@/contexts/AuthRBACContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface GroupSessionContainerProps {
   sessionId: string;
@@ -52,6 +56,57 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
 
   // Enhanced device manager for better device detection and status
   const { deviceState } = useEnhancedDeviceManager();
+  const { user } = useAuthRBAC();
+
+  // Track current user's room (for therapist, use room switching hook; for participants, track from assignments)
+  const [currentUserRoomId, setCurrentUserRoomId] = React.useState<string | null>(null);
+  
+  // For therapists: get current room from room switching hook
+  const therapistRoomSwitching = useTherapistRoomSwitching({
+    sessionId,
+    therapistName: user?.email?.split('@')[0] || 'Therapist',
+    isTherapist: isTherapist || false
+  });
+
+  // Update current room based on user type
+  React.useEffect(() => {
+    if (isTherapist) {
+      // Therapist: use room switching hook
+      setCurrentUserRoomId(therapistRoomSwitching.currentRoomId);
+    } else {
+      // For participants: check their current assignment in database
+      const checkParticipantRoom = async () => {
+        if (!user?.id) return;
+        
+        try {
+          // Get participant record
+          const { data: participant } = await supabase
+            .from('instant_session_participants')
+            .select('id')
+            .eq('session_id', sessionId)
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          if (!participant) return;
+
+          // Get breakout room assignment
+          const { data: assignment } = await supabase
+            .from('breakout_room_participants')
+            .select('breakout_room_id')
+            .eq('participant_id', participant.id)
+            .eq('is_active', true)
+            .maybeSingle();
+
+          setCurrentUserRoomId(assignment?.breakout_room_id || null);
+        } catch (error) {
+          console.error('❌ [GroupSessionContainer] Failed to check participant room:', error);
+        }
+      };
+
+      checkParticipantRoom();
+    }
+  }, [isTherapist, therapistRoomSwitching.currentRoomId, user?.id, sessionId]);
 
   // Listen for breakout room assignments (for all users, including therapists)
   // Enable listener as soon as component mounts (on session page), not just when in session
@@ -60,6 +115,14 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     enabled: true, // Always enabled when on the session page, not just when isInSession
     onAssigned: (assignment) => {
       console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
+      // Update current room for participants (therapists use room switching hook)
+      if (!isTherapist && assignment.action === 'join') {
+        console.log('🏠 [GroupSessionContainer] Participant joining room:', assignment.room_id);
+        setCurrentUserRoomId(assignment.room_id);
+      } else if (!isTherapist && assignment.action === 'return') {
+        console.log('🏠 [GroupSessionContainer] Participant returning to main session');
+        setCurrentUserRoomId(null);
+      }
     },
     disconnectFromMainSession: async () => {
       // Disconnect from peer-to-peer session when moving to breakout room
@@ -67,6 +130,25 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
       await leaveSession();
     }
   });
+
+  // Filter streams based on breakout room assignments
+  const { shouldShowStream } = useBreakoutRoomFilter({
+    sessionId,
+    currentRoomId: currentUserRoomId,
+    enabled: isInSession
+  });
+
+  // Filter remote streams based on room assignments
+  const filteredRemoteStreams = React.useMemo(() => {
+    if (!isInSession) return [];
+    return remoteStreams.filter(stream => {
+      const shouldShow = shouldShowStream(stream.id);
+      if (!shouldShow) {
+        console.log('🚫 [GroupSessionContainer] Filtering out stream (not in current room):', stream.id);
+      }
+      return shouldShow;
+    });
+  }, [remoteStreams, shouldShowStream, isInSession]);
 
   // Participants management
   const { 
@@ -321,9 +403,9 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
         <div className="flex-1 bg-slate-50 p-4 overflow-y-auto">
           <div className={cn(
             "h-full gap-4",
-            remoteStreams.length === 0 ? "grid grid-cols-1 md:grid-cols-2" :
-            remoteStreams.length === 1 ? "grid grid-cols-1 md:grid-cols-2" :
-            remoteStreams.length === 2 ? "grid grid-cols-1 md:grid-cols-3" :
+            filteredRemoteStreams.length === 0 ? "grid grid-cols-1 md:grid-cols-2" :
+            filteredRemoteStreams.length === 1 ? "grid grid-cols-1 md:grid-cols-2" :
+            filteredRemoteStreams.length === 2 ? "grid grid-cols-1 md:grid-cols-3" :
             "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
           )}>
             {/* Local Video */}
@@ -354,8 +436,8 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
             </Card>
 
             {/* Remote Video Participants */}
-            {remoteStreams.length > 0 ? (
-              remoteStreams.map((stream, index) => {
+            {filteredRemoteStreams.length > 0 ? (
+              filteredRemoteStreams.map((stream, index) => {
                 console.log('🎬 [GroupSessionContainer] Rendering remote stream:', {
                   streamId: stream.id,
                   streamIndex: index,
