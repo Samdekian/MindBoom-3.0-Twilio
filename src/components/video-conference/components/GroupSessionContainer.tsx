@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Users, Video, VideoOff, Mic, MicOff, Loader2, Camera, CameraOff } from 'lucide-react';
+import { Users, Video, VideoOff, Mic, MicOff, Loader2, Camera, CameraOff, ArrowLeft } from 'lucide-react';
 import { useVideoSession } from '@/contexts/VideoSessionContext';
 import { cn } from '@/lib/utils';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -19,6 +20,7 @@ import { useBreakoutRoomFilter } from '@/hooks/video-conference/use-breakout-roo
 import { useTherapistRoomSwitching } from '@/hooks/video-conference/use-therapist-room-switching';
 import { useAuthRBAC } from '@/contexts/AuthRBACContext';
 import { supabase } from '@/integrations/supabase/client';
+import TwilioVideoGrid from '../breakout/TwilioVideoGrid';
 
 interface GroupSessionContainerProps {
   sessionId: string;
@@ -58,9 +60,6 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
   const { deviceState } = useEnhancedDeviceManager();
   const { user } = useAuthRBAC();
 
-  // Track current user's room (for therapist, use room switching hook; for participants, track from assignments)
-  const [currentUserRoomId, setCurrentUserRoomId] = React.useState<string | null>(null);
-  
   // For therapists: get current room from room switching hook
   const therapistRoomSwitching = useTherapistRoomSwitching({
     sessionId,
@@ -68,61 +67,19 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     isTherapist: isTherapist || false
   });
 
-  // Update current room based on user type
-  React.useEffect(() => {
-    if (isTherapist) {
-      // Therapist: use room switching hook
-      setCurrentUserRoomId(therapistRoomSwitching.currentRoomId);
-    } else {
-      // For participants: check their current assignment in database
-      const checkParticipantRoom = async () => {
-        if (!user?.id) return;
-        
-        try {
-          // Get participant record
-          const { data: participant } = await supabase
-            .from('instant_session_participants')
-            .select('id')
-            .eq('session_id', sessionId)
-            .eq('user_id', user.id)
-            .eq('is_active', true)
-            .maybeSingle();
-
-          if (!participant) return;
-
-          // Get breakout room assignment
-          const { data: assignment } = await supabase
-            .from('breakout_room_participants')
-            .select('breakout_room_id')
-            .eq('participant_id', participant.id)
-            .eq('is_active', true)
-            .maybeSingle();
-
-          setCurrentUserRoomId(assignment?.breakout_room_id || null);
-        } catch (error) {
-          console.error('❌ [GroupSessionContainer] Failed to check participant room:', error);
-        }
-      };
-
-      checkParticipantRoom();
-    }
-  }, [isTherapist, therapistRoomSwitching.currentRoomId, user?.id, sessionId]);
-
-  // Listen for breakout room assignments (for all users, including therapists)
-  // Enable listener as soon as component mounts (on session page), not just when in session
-  // This ensures the listener is ready before any broadcast is sent
-  useBreakoutAssignmentListener({
-    enabled: true, // Always enabled when on the session page, not just when isInSession
+  // Listen for breakout room assignments (for participants)
+  // This hook now manages the Twilio room connection and state
+  const {
+    isInBreakoutRoom: participantInBreakoutRoom,
+    currentBreakoutRoom: participantBreakoutRoom,
+    currentRoomId: participantRoomId,
+    currentRoomName: participantRoomName,
+    leaveBreakoutRoom: participantLeaveBreakoutRoom
+  } = useBreakoutAssignmentListener({
+    enabled: !isTherapist, // Only for non-therapists
+    sessionId,
     onAssigned: (assignment) => {
       console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
-      // Update current room for participants (therapists use room switching hook)
-      if (!isTherapist && assignment.action === 'join') {
-        console.log('🏠 [GroupSessionContainer] Participant joining room:', assignment.room_id);
-        setCurrentUserRoomId(assignment.room_id);
-      } else if (!isTherapist && assignment.action === 'return') {
-        console.log('🏠 [GroupSessionContainer] Participant returning to main session');
-        setCurrentUserRoomId(null);
-      }
     },
     disconnectFromMainSession: async () => {
       // Disconnect from peer-to-peer session when moving to breakout room
@@ -131,11 +88,37 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     }
   });
 
-  // Filter streams based on breakout room assignments
+  // Determine if user is in a breakout room (works for both therapist and participants)
+  const isInBreakoutRoom = isTherapist 
+    ? therapistRoomSwitching.currentRoomId !== null 
+    : participantInBreakoutRoom;
+  
+  const currentBreakoutRoom = isTherapist 
+    ? null // Therapist room is managed separately via therapistRoomSwitching
+    : participantBreakoutRoom;
+  
+  const currentRoomId = isTherapist 
+    ? therapistRoomSwitching.currentRoomId 
+    : participantRoomId;
+  
+  const currentRoomName = isTherapist 
+    ? therapistRoomSwitching.currentRoomName 
+    : participantRoomName;
+
+  // Function to leave breakout room
+  const handleLeaveBreakoutRoom = async () => {
+    if (isTherapist) {
+      await therapistRoomSwitching.returnToMainSession();
+    } else {
+      await participantLeaveBreakoutRoom();
+    }
+  };
+
+  // Filter streams based on breakout room assignments (only when NOT in breakout room)
   const { shouldShowStream } = useBreakoutRoomFilter({
     sessionId,
-    currentRoomId: currentUserRoomId,
-    enabled: isInSession
+    currentRoomId: currentRoomId,
+    enabled: isInSession && !isInBreakoutRoom
   });
 
   // Filter remote streams based on room assignments
@@ -401,110 +384,142 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
 
         {/* Video Grid Area */}
         <div className="flex-1 bg-slate-50 p-4 overflow-y-auto">
-          <div className={cn(
-            "h-full gap-4",
-            filteredRemoteStreams.length === 0 ? "grid grid-cols-1 md:grid-cols-2" :
-            filteredRemoteStreams.length === 1 ? "grid grid-cols-1 md:grid-cols-2" :
-            filteredRemoteStreams.length === 2 ? "grid grid-cols-1 md:grid-cols-3" :
-            "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-          )}>
-            {/* Local Video */}
-            <Card className="relative overflow-hidden h-full min-h-[200px]">
-              <CardContent className="p-0 h-full bg-slate-900 flex items-center justify-center">
-                {videoState.isVideoEnabled ? (
-                  <video 
-                    ref={localVideoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="text-white flex flex-col items-center gap-2">
-                    <VideoOff className="h-8 w-8" />
-                    <span className="text-sm">Video Off</span>
-                  </div>
-                )}
-                <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
-                  You {isTherapist ? '(Therapist)' : '(Patient)'}
-                </div>
-                <div className="absolute top-2 right-2 flex gap-1">
-                  {!videoState.isVideoEnabled && <CameraOff className="h-4 w-4 text-red-400" />}
-                  {!videoState.isAudioEnabled && <MicOff className="h-4 w-4 text-red-400" />}
-                </div>
-              </CardContent>
-            </Card>
+          {/* Breakout Room Indicator */}
+          {isInBreakoutRoom && currentRoomName && (
+            <div className="mb-4 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-sm font-medium text-blue-900">
+                  Breakout Room: {currentRoomName}
+                </span>
+                <Badge variant="outline" className="text-xs">Twilio Video</Badge>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLeaveBreakoutRoom}
+                className="gap-1"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                Return to Main
+              </Button>
+            </div>
+          )}
 
-            {/* Remote Video Participants */}
-            {filteredRemoteStreams.length > 0 ? (
-              filteredRemoteStreams.map((stream, index) => {
-                console.log('🎬 [GroupSessionContainer] Rendering remote stream:', {
-                  streamId: stream.id,
-                  streamIndex: index,
-                  streamActive: stream.active
-                });
-                
-                return (
-                  <Card key={stream.id} className="relative overflow-hidden h-full min-h-[200px]">
-                    <CardContent className="p-0 h-full bg-slate-800 flex items-center justify-center">
-                      <video
-                        ref={(el) => {
-                          if (el) {
-                            remoteVideoRefs.current.set(stream.id, el);
-                            // Immediately attach the stream if it's not already attached
-                            if (el.srcObject !== stream) {
-                              el.srcObject = stream;
-                            }
-                          }
-                        }}
-                        autoPlay
-                        playsInline
-                        muted={false}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
-                        Participant {index + 1}
-                      </div>
-                      <div className="absolute top-2 right-2">
-                        <div className={cn(
-                          "h-2 w-2 rounded-full",
-                          stream.active ? "bg-green-400" : "bg-red-400"
-                        )} />
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            ) : (
+          {/* Conditional Video Grid: Twilio (breakout) or WebRTC (main session) */}
+          {isInBreakoutRoom && currentBreakoutRoom ? (
+            // Twilio Video Grid for breakout rooms
+            <TwilioVideoGrid
+              room={currentBreakoutRoom}
+              roomName={currentRoomName || undefined}
+            />
+          ) : (
+            // WebRTC Video Grid for main session
+            <div className={cn(
+              "h-full gap-4",
+              filteredRemoteStreams.length === 0 ? "grid grid-cols-1 md:grid-cols-2" :
+              filteredRemoteStreams.length === 1 ? "grid grid-cols-1 md:grid-cols-2" :
+              filteredRemoteStreams.length === 2 ? "grid grid-cols-1 md:grid-cols-3" :
+              "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+            )}>
+              {/* Local Video */}
               <Card className="relative overflow-hidden h-full min-h-[200px]">
-                <CardContent className="p-0 h-full bg-slate-800 flex items-center justify-center">
-                  <div className="text-white flex flex-col items-center gap-2 p-4">
-                    <Users className="h-8 w-8" />
-                    <span className="text-sm font-medium">Waiting for participants...</span>
-                    <div className="text-xs opacity-70 text-center">
-                      {connectionState === 'CONNECTING' && 'Establishing connection...'}
-                      {connectionState === 'CONNECTED' && remoteStreams.length === 0 && 'Connected - waiting for others to join'}
-                      {connectionState === 'FAILED' && 'Connection failed - check your internet'}
-                      {connectionState === 'DISCONNECTED' && 'Connection lost - attempting to reconnect'}
-                      {connectionState === 'IDLE' && 'Ready to connect'}
-                    </div>
-                  </div>
-                  {connectionState === 'FAILED' && (
-                    <div className="absolute top-2 right-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        onClick={reconnectSession}
-                        className="text-xs text-white border-white/20 hover:bg-white/10"
-                      >
-                        Retry
-                      </Button>
+                <CardContent className="p-0 h-full bg-slate-900 flex items-center justify-center">
+                  {videoState.isVideoEnabled ? (
+                    <video 
+                      ref={localVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-white flex flex-col items-center gap-2">
+                      <VideoOff className="h-8 w-8" />
+                      <span className="text-sm">Video Off</span>
                     </div>
                   )}
+                  <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                    You {isTherapist ? '(Therapist)' : '(Patient)'}
+                  </div>
+                  <div className="absolute top-2 right-2 flex gap-1">
+                    {!videoState.isVideoEnabled && <CameraOff className="h-4 w-4 text-red-400" />}
+                    {!videoState.isAudioEnabled && <MicOff className="h-4 w-4 text-red-400" />}
+                  </div>
                 </CardContent>
               </Card>
-            )}
-          </div>
+
+              {/* Remote Video Participants */}
+              {filteredRemoteStreams.length > 0 ? (
+                filteredRemoteStreams.map((stream, index) => {
+                  console.log('🎬 [GroupSessionContainer] Rendering remote stream:', {
+                    streamId: stream.id,
+                    streamIndex: index,
+                    streamActive: stream.active
+                  });
+                  
+                  return (
+                    <Card key={stream.id} className="relative overflow-hidden h-full min-h-[200px]">
+                      <CardContent className="p-0 h-full bg-slate-800 flex items-center justify-center">
+                        <video
+                          ref={(el) => {
+                            if (el) {
+                              remoteVideoRefs.current.set(stream.id, el);
+                              // Immediately attach the stream if it's not already attached
+                              if (el.srcObject !== stream) {
+                                el.srcObject = stream;
+                              }
+                            }
+                          }}
+                          autoPlay
+                          playsInline
+                          muted={false}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-2 left-2 text-xs text-white bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                          Participant {index + 1}
+                        </div>
+                        <div className="absolute top-2 right-2">
+                          <div className={cn(
+                            "h-2 w-2 rounded-full",
+                            stream.active ? "bg-green-400" : "bg-red-400"
+                          )} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              ) : (
+                <Card className="relative overflow-hidden h-full min-h-[200px]">
+                  <CardContent className="p-0 h-full bg-slate-800 flex items-center justify-center">
+                    <div className="text-white flex flex-col items-center gap-2 p-4">
+                      <Users className="h-8 w-8" />
+                      <span className="text-sm font-medium">Waiting for participants...</span>
+                      <div className="text-xs opacity-70 text-center">
+                        {connectionState === 'CONNECTING' && 'Establishing connection...'}
+                        {connectionState === 'CONNECTED' && remoteStreams.length === 0 && 'Connected - waiting for others to join'}
+                        {connectionState === 'FAILED' && 'Connection failed - check your internet'}
+                        {connectionState === 'DISCONNECTED' && 'Connection lost - attempting to reconnect'}
+                        {connectionState === 'IDLE' && 'Ready to connect'}
+                      </div>
+                    </div>
+                    {connectionState === 'FAILED' && (
+                      <div className="absolute top-2 right-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={reconnectSession}
+                          className="text-xs text-white border-white/20 hover:bg-white/10"
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Enhanced Controls */}
