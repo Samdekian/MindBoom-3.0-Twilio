@@ -59,9 +59,15 @@ export function useTwilioVideoDisplay(
       
       // Attach to new element
       track.attach(element);
-      attachedElementsRef.current.set(track.sid, element);
+      // Use track name or a unique identifier (local tracks don't have sid)
+      const trackId = 'sid' in track ? track.sid : track.name || `local-${Date.now()}`;
+      attachedElementsRef.current.set(trackId, element);
       
-      console.log('📹 [TwilioVideoDisplay] Track attached:', track.sid);
+      console.log('📹 [TwilioVideoDisplay] Track attached:', trackId, {
+        kind: track.kind,
+        isEnabled: track.isEnabled,
+        isLocal: !('sid' in track)
+      });
     } catch (error) {
       console.error('❌ [TwilioVideoDisplay] Failed to attach track:', error);
     }
@@ -78,10 +84,12 @@ export function useTwilioVideoDisplay(
     
     try {
       track.detach(element);
-      attachedElementsRef.current.delete(track.sid);
+      // Use track name or a unique identifier (local tracks don't have sid)
+      const trackId = 'sid' in track ? track.sid : track.name || `local-${Date.now()}`;
+      attachedElementsRef.current.delete(trackId);
       element.srcObject = null;
       
-      console.log('📹 [TwilioVideoDisplay] Track detached:', track.sid);
+      console.log('📹 [TwilioVideoDisplay] Track detached:', trackId);
     } catch (error) {
       console.error('❌ [TwilioVideoDisplay] Failed to detach track:', error);
     }
@@ -91,25 +99,34 @@ export function useTwilioVideoDisplay(
    * Extract track info from local participant
    */
   const getLocalTrackInfo = useCallback((): TwilioTrackInfo | null => {
-    if (!room?.localParticipant) return null;
+    if (!room?.localParticipant) {
+      console.log('📋 [TwilioVideoDisplay] No local participant');
+      return null;
+    }
     
     const localParticipant = room.localParticipant;
     let videoTrack: LocalVideoTrack | null = null;
     let audioTrack: LocalAudioTrack | null = null;
     
-    localParticipant.videoTracks.forEach(publication => {
+    console.log('📋 [TwilioVideoDisplay] Local participant videoTracks:', localParticipant.videoTracks.size);
+    localParticipant.videoTracks.forEach((publication, trackName) => {
+      console.log('📋 [TwilioVideoDisplay] Video publication:', trackName, {
+        isTrackEnabled: publication.isTrackEnabled,
+        track: publication.track ? 'exists' : 'null',
+        trackEnabled: publication.track?.isEnabled
+      });
       if (publication.track) {
         videoTrack = publication.track as LocalVideoTrack;
       }
     });
     
-    localParticipant.audioTracks.forEach(publication => {
+    localParticipant.audioTracks.forEach((publication, trackName) => {
       if (publication.track) {
         audioTrack = publication.track as LocalAudioTrack;
       }
     });
     
-    return {
+    const trackInfo = {
       participantIdentity: localParticipant.identity,
       participantSid: localParticipant.sid,
       isLocal: true,
@@ -119,6 +136,15 @@ export function useTwilioVideoDisplay(
       isAudioEnabled: audioTrack?.isEnabled ?? false,
       networkQuality: localParticipant.networkQualityLevel ?? null
     };
+    
+    console.log('📋 [TwilioVideoDisplay] Local track info:', {
+      hasVideoTrack: !!videoTrack,
+      isVideoEnabled: trackInfo.isVideoEnabled,
+      hasAudioTrack: !!audioTrack,
+      isAudioEnabled: trackInfo.isAudioEnabled
+    });
+    
+    return trackInfo;
   }, [room]);
 
   /**
@@ -256,6 +282,18 @@ export function useTwilioVideoDisplay(
     });
 
     // Local participant events
+    const handleLocalTrackPublished = () => {
+      console.log('📹 [TwilioVideoDisplay] Local track published');
+      handleLocalTrackUpdate();
+    };
+
+    const handleLocalTrackUnpublished = () => {
+      console.log('📹 [TwilioVideoDisplay] Local track unpublished');
+      handleLocalTrackUpdate();
+    };
+
+    room.localParticipant.on('trackPublished', handleLocalTrackPublished);
+    room.localParticipant.on('trackUnpublished', handleLocalTrackUnpublished);
     room.localParticipant.on('trackEnabled', handleLocalTrackUpdate);
     room.localParticipant.on('trackDisabled', handleLocalTrackUpdate);
 
@@ -276,6 +314,8 @@ export function useTwilioVideoDisplay(
         participant.off('trackDisabled', handleTrackUpdate);
       });
 
+      room.localParticipant.off('trackPublished', handleLocalTrackPublished);
+      room.localParticipant.off('trackUnpublished', handleLocalTrackUnpublished);
       room.localParticipant.off('trackEnabled', handleLocalTrackUpdate);
       room.localParticipant.off('trackDisabled', handleLocalTrackUpdate);
 

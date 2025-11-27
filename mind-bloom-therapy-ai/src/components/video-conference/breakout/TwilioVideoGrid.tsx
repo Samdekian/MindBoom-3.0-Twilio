@@ -32,16 +32,35 @@ const TwilioVideoTile: React.FC<{
     const element = videoRef.current;
     const track = trackInfo.videoTrack;
 
+    console.log('📹 [TwilioVideoTile] Effect triggered:', {
+      participantIdentity: trackInfo.participantIdentity,
+      hasElement: !!element,
+      hasTrack: !!track,
+      isVideoEnabled: trackInfo.isVideoEnabled,
+      trackEnabled: track?.isEnabled
+    });
+
     if (element && track) {
-      console.log('📹 [TwilioVideoTile] Attaching track for:', trackInfo.participantIdentity);
+      const trackId = 'sid' in track ? track.sid : track.name || 'local';
+      console.log('📹 [TwilioVideoTile] Attaching track for:', trackInfo.participantIdentity, {
+        trackId,
+        trackKind: track.kind,
+        trackEnabled: track.isEnabled
+      });
       attachTrack(track, element);
 
       return () => {
         console.log('📹 [TwilioVideoTile] Detaching track for:', trackInfo.participantIdentity);
         detachTrack(track, element);
       };
+    } else {
+      console.warn('⚠️ [TwilioVideoTile] Cannot attach track:', {
+        hasElement: !!element,
+        hasTrack: !!track,
+        participantIdentity: trackInfo.participantIdentity
+      });
     }
-  }, [trackInfo.videoTrack, trackInfo.participantIdentity, attachTrack, detachTrack]);
+  }, [trackInfo.videoTrack, trackInfo.participantIdentity, trackInfo.isVideoEnabled, attachTrack, detachTrack]);
 
   // Get network quality indicator
   const getNetworkQualityColor = (quality: number | null) => {
