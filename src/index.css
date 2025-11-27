@@ -1,9 +1,9 @@
 
+@import './styles/chat-animations.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import './styles/chat-animations.css';
 
 @layer base {
   :root {
