@@ -1,0 +1,59 @@
+# Project ID should be configured via Supabase CLI or dashboard
+# For local development, use: supabase link --project-ref your-project-id
+# For production, this will be set automatically by your deployment
+project_id = "your-project-id-here"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[db]
+port = 54322
+
+[functions]
+
+[functions.get-ice-config]
+verify_jwt = false
+
+[functions.session-analytics]
+verify_jwt = false
+
+[functions.production-cleanup]
+verify_jwt = false
+
+[functions.production-monitor]
+verify_jwt = false
+
+[functions.system-health]
+verify_jwt = false
+
+[functions.create-admin-user]
+verify_jwt = false
+
+[functions.openai-realtime]
+verify_jwt = false
+
+[functions.get-turn-credentials]
+verify_jwt = false
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[realtime]
+enabled = true

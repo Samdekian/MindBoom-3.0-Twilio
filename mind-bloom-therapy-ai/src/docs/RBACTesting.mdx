@@ -1,0 +1,130 @@
+
+# Testing the RBAC System
+
+## Overview
+
+This document provides guidelines for testing the Role-Based Access Control (RBAC) system, ensuring it functions correctly and securely.
+
+## Testing Components
+
+### 1. Unit Testing RBAC Components
+
+Test individual RBAC components using the MockAuthRBACProvider:
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import { MockAuthRBACProvider } from '@/utils/testing/MockAuthRBACProvider';
+import RoleProtectedComponent from './RoleProtectedComponent';
+
+test('shows content for admin users', () => {
+  render(
+    <MockAuthRBACProvider 
+      isAuthenticated={true} 
+      roles={['admin']}
+      permissions={[]}
+    >
+      <RoleProtectedComponent allowedRoles={['admin']} />
+    </MockAuthRBACProvider>
+  );
+  
+  expect(screen.getByText('Protected Content')).toBeInTheDocument();
+});
+
+test('hides content for non-admin users', () => {
+  render(
+    <MockAuthRBACProvider 
+      isAuthenticated={true} 
+      roles={['patient']}
+      permissions={[]}
+    >
+      <RoleProtectedComponent allowedRoles={['admin']} />
+    </MockAuthRBACProvider>
+  );
+  
+  expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+});
+```
+
+### 2. Testing Protected Routes
+
+Test route protection with the included test suite:
+
+1. Navigate to `/rbac-tests` in the application
+2. Use the "Route Tests" tab to test specific routes
+3. Use the "Role Tests" tab to test role-specific routes
+
+### 3. Testing Role Consistency
+
+The application includes tools to test role data consistency:
+
+1. Navigate to `/rbac-tests` in the application  
+2. Use the "Test Dashboard" tab to check your user's roles
+3. For administrators, additional system-wide tests are available
+
+### 4. Integration Testing
+
+In integration tests, you can use the setupRBACTestEnvironment helper:
+
+```tsx
+import { setupRBACTestEnvironment } from '@/tests/rbac/rbac-test-helpers';
+
+describe('Admin Dashboard Integration', () => {
+  beforeEach(() => {
+    setupRBACTestEnvironment('admin');
+  });
+  
+  test('admin can access the user management page', () => {
+    // Test code here
+  });
+});
+```
+
+## Common Test Scenarios
+
+### 1. Role-Based Route Access
+
+Test that only users with specific roles can access certain routes:
+
+| Role      | Admin Routes | Therapist Routes | Patient Routes | Public Routes |
+|-----------|-------------|-----------------|---------------|--------------|
+| Admin     | ✓           | ✓               | ✓             | ✓            |
+| Therapist | ✗           | ✓               | ✗             | ✓            |
+| Patient   | ✗           | ✗               | ✓             | ✓            |
+| Support   | ✗           | ✗               | ✗             | ✓            |
+| No Auth   | ✗           | ✗               | ✗             | ✓            |
+
+### 2. Permission-Based Feature Access
+
+Test that only users with specific permissions can access certain features:
+
+| Permission        | Read Patients | Modify Patients | View Analytics | Admin Settings |
+|-------------------|--------------|----------------|----------------|----------------|
+| patients:read     | ✓            | ✗              | ✗              | ✗              |
+| patients:write    | ✓            | ✓              | ✗              | ✗              |
+| analytics:read    | ✗            | ✗              | ✓              | ✗              |
+| admin:settings    | ✗            | ✗              | ✗              | ✓              |
+
+## Automated Testing
+
+The project includes automated tests for the RBAC system:
+
+1. Run unit tests: `npm run test:unit`
+2. Run integration tests: `npm run test:integration`
+3. Run E2E tests: `npm run test:e2e` (requires a running development server)
+
+## Troubleshooting Common Issues
+
+1. **Users can't access routes they should have access to**
+   - Check that the role assignments are correct in the database
+   - Verify the user's roles are being loaded correctly from the API
+   - Check if the role is correctly typed as a valid `UserRole`
+
+2. **Protected routes aren't working correctly**
+   - Ensure RoleProtectedRoute is used correctly
+   - Check that role names match exactly (case-sensitive)
+   - Verify the route is configured correctly in the routes file
+
+3. **Permission checks aren't working**
+   - Verify permissions are being loaded correctly
+   - Check that permission names match exactly
+   - Test with MockAuthRBACProvider to isolate the issue

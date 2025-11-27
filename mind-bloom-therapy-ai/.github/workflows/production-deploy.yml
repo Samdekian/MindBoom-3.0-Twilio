@@ -1,0 +1,180 @@
+
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run security scan
+        run: npx audit-ci --high  # Fail on high security vulnerabilities
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.PRODUCTION_SUPABASE_URL }}
+          VITE_SUPABASE_KEY: ${{ secrets.PRODUCTION_SUPABASE_KEY }}
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./dist/
+          retention-days: 7
+
+  security-validation:
+    name: Security Validation
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./dist/
+      - name: Run security validation
+        run: node scripts/security-validation.js
+      - name: Check for sensitive data exposure
+        run: node scripts/check-sensitive-data.js
+      - name: Validate content security policy
+        run: node scripts/validate-csp.js
+      - name: Generate security report
+        if: always()
+        run: node scripts/generate-security-report.js
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report-${{ github.run_number }}
+          path: ./security-report/
+          retention-days: 90  # Keep security reports for compliance
+
+  deploy:
+    name: Deploy to Production
+    needs: [build, security-validation]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://example.com
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./dist/
+      
+      - name: Pre-deployment security check
+        id: pre_security_check
+        run: |
+          echo "Running pre-deployment security check..."
+          curl -f -s -S -o /dev/null -H "Authorization: Bearer ${{ secrets.SECURITY_TOKEN }}" \
+            "https://example.com/api/security/pre-deployment-check" || echo "::warning::Pre-deployment security check failed, but continuing with deployment"
+      
+      - name: Pre-deployment health check
+        id: pre_health_check
+        run: |
+          echo "Running pre-deployment health check..."
+          curl -f -s -S -o /dev/null "https://example.com/api/health" || echo "::warning::Pre-deployment health check failed, but continuing with deployment"
+      
+      - name: Deploy to production server
+        id: deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.PRODUCTION_FTP_SERVER }}
+          username: ${{ secrets.PRODUCTION_FTP_USERNAME }}
+          password: ${{ secrets.PRODUCTION_FTP_PASSWORD }}
+          local-dir: ./dist/
+          server-dir: ./
+          dangerous-clean-slate: false
+      
+      - name: Post-deployment health check
+        id: post_health_check
+        run: |
+          echo "Running post-deployment health check..."
+          attempt=1
+          max_attempts=5
+          until curl -f -s -S -o /dev/null "https://example.com/api/health" || [ $attempt -gt $max_attempts ]
+          do
+            echo "Health check attempt $attempt failed, retrying in 10 seconds..."
+            sleep 10
+            attempt=$((attempt+1))
+          done
+          
+          if [ $attempt -gt $max_attempts ]; then
+            echo "::error::Health check failed after $max_attempts attempts!"
+            exit 1
+          else
+            echo "Health check passed on attempt $attempt"
+          fi
+
+      - name: Post-deployment security check
+        id: post_security_check
+        run: |
+          echo "Running post-deployment security check..."
+          curl -f -s -S -o /dev/null -H "Authorization: Bearer ${{ secrets.SECURITY_TOKEN }}" \
+            "https://example.com/api/security/post-deployment-check" || echo "::warning::Post-deployment security check failed"
+      
+      - name: Rollback on failure
+        if: failure() && steps.deploy.outcome == 'success' && steps.pre_health_check.outcome == 'success'
+        run: |
+          echo "Deployment failed health checks, initiating rollback..."
+          # This would typically restore a backup or redeploy the previous version
+          curl -X POST -H "Authorization: Bearer ${{ secrets.ROLLBACK_TOKEN }}" \
+            "https://example.com/api/ops/rollback"
+      
+      - name: Notify team on failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: deployments
+          SLACK_COLOR: danger
+          SLACK_TITLE: Production Deployment Failed
+          SLACK_MESSAGE: "Deployment to production failed. Check GitHub Actions for details."
+      
+      - name: Notify team on success
+        if: success()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_CHANNEL: deployments
+          SLACK_COLOR: good
+          SLACK_TITLE: Production Deployment Successful
+          SLACK_MESSAGE: "Deployment to production completed successfully."
+
+  compliance-check:
+    name: Compliance Documentation
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Generate deployment audit record
+        run: |
+          echo "Generating deployment audit record..."
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          COMMIT=$(git rev-parse HEAD)
+          echo "{\"deployment_date\":\"$DATE\",\"commit\":\"$COMMIT\",\"environment\":\"production\",\"status\":\"successful\"}" > deployment-record.json
+      - name: Upload compliance record
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-record-${{ github.run_number }}
+          path: ./deployment-record.json
+          retention-days: 365  # Keep for a year for compliance
