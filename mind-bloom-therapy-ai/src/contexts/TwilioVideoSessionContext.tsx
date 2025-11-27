@@ -268,6 +268,11 @@ export const TwilioVideoSessionProvider: React.FC<TwilioVideoSessionProviderProp
         }
         break;
 
+      case 'connected':
+        console.log('✅ [TwilioVideoSession] Connected event - setting status to connected');
+        setStatus('connected');
+        break;
+
       case 'reconnecting':
         setStatus('reconnecting');
         toast({
@@ -300,6 +305,7 @@ export const TwilioVideoSessionProvider: React.FC<TwilioVideoSessionProviderProp
       'participantDisconnected',
       'dominantSpeakerChanged',
       'networkQualityLevelChanged',
+      'connected',
       'reconnecting',
       'reconnected',
       'disconnected'

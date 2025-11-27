@@ -177,6 +177,7 @@ export interface TwilioRoomEvent {
     | 'trackDisabled'
     | 'dominantSpeakerChanged'
     | 'networkQualityLevelChanged'
+    | 'connected'
     | 'reconnecting'
     | 'reconnected'
     | 'disconnected';

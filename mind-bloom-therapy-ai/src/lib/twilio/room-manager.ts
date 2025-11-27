@@ -62,8 +62,9 @@ export class TwilioRoomManager {
 
       console.log('✅ [TwilioRoomManager] Connected to room:', this.room.sid);
       
+      // Emit 'connected' for initial connection, 'reconnected' is only for actual reconnections
       this.emitEvent({
-        type: 'reconnected',
+        type: 'connected',
         timestamp: Date.now()
       });
 
