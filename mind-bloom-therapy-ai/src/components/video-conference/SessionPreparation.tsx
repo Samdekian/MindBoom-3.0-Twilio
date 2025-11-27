@@ -258,7 +258,7 @@ const SessionPreparation: React.FC<SessionPreparationProps> = ({
               onDismiss={clearError}
             />
           )}
-
+          
           <div className="flex space-x-2">
             <Button 
               onClick={handleTestDevices} 

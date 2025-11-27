@@ -305,9 +305,9 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
                   </div>
                 )}
                 
-                {displayParticipants.length > 0 ? (
+        {displayParticipants.length > 0 ? (
                   <ParticipantsList
-                    participants={displayParticipants}
+            participants={displayParticipants}
                     isTherapist={isTherapist}
                     currentUserId={therapistInfo?.id || patientInfo?.id}
                     onRemoveParticipant={removeParticipant}
