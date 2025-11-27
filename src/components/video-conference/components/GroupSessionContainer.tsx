@@ -87,16 +87,16 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     }
   }, [isTherapist, therapistRoomSwitching.currentRoomId]);
 
-  // Listen for breakout room assignments (for participants)
+  // Listen for breakout room assignments (for ALL users including therapists)
   // This hook now manages the Twilio room connection and state
   const {
-    isInBreakoutRoom: participantInBreakoutRoom,
-    currentBreakoutRoom: participantBreakoutRoom,
-    currentRoomId: participantRoomId,
-    currentRoomName: participantRoomName,
-    leaveBreakoutRoom: participantLeaveBreakoutRoom
+    isInBreakoutRoom: assignmentInBreakoutRoom,
+    currentBreakoutRoom: assignmentBreakoutRoom,
+    currentRoomId: assignmentRoomId,
+    currentRoomName: assignmentRoomName,
+    leaveBreakoutRoom: assignmentLeaveBreakoutRoom
   } = useBreakoutAssignmentListener({
-    enabled: !isTherapist, // Only for non-therapists
+    enabled: true, // Enable for ALL users (therapist + participants)
     sessionId,
     onAssigned: (assignment) => {
       console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
@@ -108,30 +108,35 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     }
   });
 
-  // Determine if user is in a breakout room (works for both therapist and participants)
+  // Determine if user is in a breakout room
+  // For therapists: can use either assignment listener OR manual room switching
+  // For participants: uses assignment listener only
   const isInBreakoutRoom = isTherapist 
-    ? therapistRoomSwitching.currentRoomId !== null 
-    : participantInBreakoutRoom;
+    ? (therapistRoomSwitching.currentRoomId !== null || assignmentInBreakoutRoom)
+    : assignmentInBreakoutRoom;
   
-  // Get the Twilio Room object for rendering (works for both therapist and participants)
+  // Get the Twilio Room object for rendering
+  // Priority: manual therapist room > assignment room
   const currentBreakoutRoom = isTherapist 
-    ? therapistTwilioRoom // Use the actual Twilio Room for therapist
-    : participantBreakoutRoom;
+    ? (therapistTwilioRoom || assignmentBreakoutRoom)
+    : assignmentBreakoutRoom;
   
   const currentRoomId = isTherapist 
-    ? therapistRoomSwitching.currentRoomId 
-    : participantRoomId;
+    ? (therapistRoomSwitching.currentRoomId || assignmentRoomId)
+    : assignmentRoomId;
   
   const currentRoomName = isTherapist 
-    ? therapistRoomSwitching.currentRoomName 
-    : participantRoomName;
+    ? (therapistRoomSwitching.currentRoomName || assignmentRoomName)
+    : assignmentRoomName;
 
   // Function to leave breakout room
   const handleLeaveBreakoutRoom = async () => {
-    if (isTherapist) {
+    if (isTherapist && therapistRoomSwitching.currentRoomId) {
+      // Therapist manually joined a room - use manual return
       await therapistRoomSwitching.returnToMainSession();
     } else {
-      await participantLeaveBreakoutRoom();
+      // Used assignment listener (works for both therapist and participant)
+      await assignmentLeaveBreakoutRoom();
     }
   };
 
