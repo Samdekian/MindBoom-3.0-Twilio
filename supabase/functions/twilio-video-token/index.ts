@@ -201,11 +201,30 @@ serve(async (req) => {
         sessionId
       });
       
-      const { data: session, error: sessionError } = await supabase
+      // Try to find session by token first, then by ID
+      let session = null;
+      let sessionError = null;
+      
+      // First try with session_token
+      const { data: sessionByToken, error: errorByToken } = await supabase
         .from('instant_sessions')
         .select('therapist_id, host_user_id')
-        .or(`session_token.eq.${sessionToken},id.eq.${sessionId}`)
+        .eq('session_token', sessionToken)
         .single();
+      
+      if (sessionByToken && !errorByToken) {
+        session = sessionByToken;
+      } else {
+        // If not found by token, try by ID
+        const { data: sessionById, error: errorById } = await supabase
+          .from('instant_sessions')
+          .select('therapist_id, host_user_id')
+          .eq('id', sessionId)
+          .single();
+        
+        session = sessionById;
+        sessionError = errorById;
+      }
 
       if (sessionError || !session) {
         console.error("❌ [twilio-video-token] Session not found:", {
