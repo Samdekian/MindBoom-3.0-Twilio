@@ -129,6 +129,14 @@ export const TwilioVideoGrid: React.FC<TwilioVideoGridProps> = ({
   roomName,
   className
 }) => {
+  console.log('🎬 [TwilioVideoGrid] Rendering with room:', {
+    hasRoom: !!room,
+    roomSid: room?.sid,
+    roomName,
+    localParticipant: room?.localParticipant?.identity,
+    localParticipantSid: room?.localParticipant?.sid
+  });
+  
   const {
     localTrackInfo,
     remoteTrackInfos,
@@ -136,6 +144,14 @@ export const TwilioVideoGrid: React.FC<TwilioVideoGridProps> = ({
     attachTrackToElement,
     detachTrackFromElement
   } = useTwilioVideoDisplay({ room, enabled: !!room });
+  
+  console.log('🎬 [TwilioVideoGrid] Track info:', {
+    hasLocalTrackInfo: !!localTrackInfo,
+    localVideoTrack: !!localTrackInfo?.videoTrack,
+    localAudioTrack: !!localTrackInfo?.audioTrack,
+    remoteCount: remoteTrackInfos.length,
+    totalParticipants: (localTrackInfo ? 1 : 0) + remoteTrackInfos.length
+  });
 
   const totalParticipants = (localTrackInfo ? 1 : 0) + remoteTrackInfos.length;
 

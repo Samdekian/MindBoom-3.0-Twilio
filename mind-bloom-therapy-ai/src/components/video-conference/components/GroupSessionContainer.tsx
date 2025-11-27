@@ -253,6 +253,17 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
     // Determine which room to show
     const displayRoom = isInBreakoutRoom && currentBreakoutRoom ? currentBreakoutRoom : room;
     
+    console.log('🎬 [GroupSessionContainer] Rendering video session:', {
+      isInSession,
+      hasRoom: !!room,
+      hasDisplayRoom: !!displayRoom,
+      isInBreakoutRoom,
+      hasCurrentBreakoutRoom: !!currentBreakoutRoom,
+      roomSid: room?.sid,
+      displayRoomSid: displayRoom?.sid,
+      connectionState
+    });
+    
     return (
       <div className={cn("h-full flex flex-col", className)}>
         {/* Session Header */}
