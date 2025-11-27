@@ -1,1 +1,8 @@
 .vercel
+
+# Backup files
+*.tar.gz
+*.backup
+*-backup-*.tar.gz
+*-FULL-backup-*.tar.gz
+BACKUP_INFO.txt
