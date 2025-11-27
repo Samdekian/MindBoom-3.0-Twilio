@@ -120,7 +120,7 @@ serve(async (req) => {
       // Then, fetch the session separately to check authorization
       const { data: session, error: sessionError } = await supabase
         .from('instant_sessions')
-        .select('therapist_id, host_user_id')
+        .select('therapist_id')
         .eq('id', breakoutRoom.session_id)
         .single();
 
@@ -141,7 +141,7 @@ serve(async (req) => {
       }
 
       // Check if user is therapist
-      const isTherapist = session.therapist_id === user.id || session.host_user_id === user.id;
+      const isTherapist = session.therapist_id === user.id;
       
       // Check if user is participant in the session
       const { data: participantData } = await supabase
@@ -161,8 +161,7 @@ serve(async (req) => {
           isTherapist,
           isParticipant,
           sessionId: breakoutRoom.session_id,
-          therapistId: session.therapist_id,
-          hostUserId: session.host_user_id
+          therapistId: session.therapist_id
         });
         return new Response(
           JSON.stringify({ error: 'Not authorized to join this breakout room' }),
@@ -211,7 +210,7 @@ serve(async (req) => {
       
       const { data: session, error: sessionError } = await supabase
         .from('instant_sessions')
-        .select('therapist_id, host_user_id')
+        .select('therapist_id')
         .or(`session_token.eq.${sessionToken},id.eq.${sessionId}`)
         .maybeSingle();
       
@@ -242,7 +241,7 @@ serve(async (req) => {
       }
 
       // Only therapist can generate tokens for main sessions
-      const isTherapist = session.therapist_id === user.id || session.host_user_id === user.id;
+      const isTherapist = session.therapist_id === user.id;
 
       if (!isTherapist) {
         console.error("❌ [twilio-video-token] User not authorized for session");
