@@ -198,51 +198,30 @@ serve(async (req) => {
       console.log("🎥 [twilio-video-token] Looking up session:", {
         roomName,
         sessionToken,
+        sessionId,
+        extractedToken: roomName.startsWith('session-') ? roomName.replace('session-', '') : roomName
+      });
+      
+      // Try to find session by token or ID using a single query
+      // PostgREST .or() syntax: "field1.eq.value1,field2.eq.value2"
+      console.log("🔍 [twilio-video-token] Querying session by token or ID:", {
+        sessionToken,
         sessionId
       });
       
-      // Try to find session by token first, then by ID
-      // Use maybeSingle() to avoid errors when no rows found
-      let session = null;
-      let sessionError = null;
-      
-      // First try with session_token
-      const { data: sessionByToken, error: errorByToken } = await supabase
+      const { data: session, error: sessionError } = await supabase
         .from('instant_sessions')
         .select('therapist_id, host_user_id')
-        .eq('session_token', sessionToken)
+        .or(`session_token.eq.${sessionToken},id.eq.${sessionId}`)
         .maybeSingle();
       
-      if (errorByToken) {
-        // Real error occurred
-        sessionError = errorByToken;
-        console.error("❌ [twilio-video-token] Error querying by token:", errorByToken);
-      } else if (sessionByToken) {
-        // Found by token
-        session = sessionByToken;
-        console.log("✅ [twilio-video-token] Found session by token:", sessionToken);
-      } else {
-        // Token not found, try by ID
-        console.log("🔄 [twilio-video-token] Token not found, trying by ID:", sessionId);
-        const { data: sessionById, error: errorById } = await supabase
-          .from('instant_sessions')
-          .select('therapist_id, host_user_id')
-          .eq('id', sessionId)
-          .maybeSingle();
-        
-        if (errorById) {
-          // Real error occurred
-          sessionError = errorById;
-          console.error("❌ [twilio-video-token] Error querying by ID:", errorById);
-        } else if (sessionById) {
-          // Found by ID
-          session = sessionById;
-          console.log("✅ [twilio-video-token] Found session by ID:", sessionId);
-        } else {
-          // Not found by either method
-          console.error("❌ [twilio-video-token] Session not found by token or ID");
-        }
-      }
+      console.log("📊 [twilio-video-token] Query result:", {
+        found: !!session,
+        error: sessionError,
+        data: session,
+        searchedToken: sessionToken,
+        searchedId: sessionId
+      });
 
       if (sessionError || !session) {
         console.error("❌ [twilio-video-token] Session lookup failed:", {
