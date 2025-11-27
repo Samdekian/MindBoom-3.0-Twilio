@@ -186,14 +186,36 @@ serve(async (req) => {
 
     } else {
       // Original logic for main sessions
+      // Handle roomName format: "session-{token}" or just "{token}" or "{uuid}"
+      let sessionToken = roomName;
+      let sessionId = roomName;
+      
+      // If roomName starts with "session-", extract the token
+      if (roomName.startsWith('session-')) {
+        sessionToken = roomName.replace('session-', '');
+      }
+      
+      console.log("🎥 [twilio-video-token] Looking up session:", {
+        roomName,
+        sessionToken,
+        sessionId
+      });
+      
       const { data: session, error: sessionError } = await supabase
         .from('instant_sessions')
         .select('therapist_id, host_user_id')
-        .or(`session_token.eq.${roomName},id.eq.${roomName}`)
+        .or(`session_token.eq.${sessionToken},id.eq.${sessionId}`)
         .single();
 
       if (sessionError || !session) {
-        console.error("❌ [twilio-video-token] Session not found:", sessionError);
+        console.error("❌ [twilio-video-token] Session not found:", {
+          error: sessionError,
+          roomName,
+          sessionToken,
+          sessionId,
+          errorCode: sessionError?.code,
+          errorMessage: sessionError?.message
+        });
         return new Response(
           JSON.stringify({ error: 'Session not found' }),
           { 
