@@ -187,11 +187,18 @@ serve(async (req) => {
       // Original logic for main sessions
       // Handle roomName format: "session-{token}" or just "{token}" or "{uuid}"
       let sessionToken = roomName;
-      let sessionId = roomName;
+      let sessionId: string | null = null;
       
       // If roomName starts with "session-", extract the token
       if (roomName.startsWith('session-')) {
         sessionToken = roomName.replace('session-', '');
+      } else {
+        // If not starting with "session-", check if it's a UUID
+        // UUID format: 8-4-4-4-12 hex characters
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (uuidRegex.test(roomName)) {
+          sessionId = roomName;
+        }
       }
       
       console.log("🎥 [twilio-video-token] Looking up session:", {
@@ -201,25 +208,51 @@ serve(async (req) => {
         extractedToken: roomName.startsWith('session-') ? roomName.replace('session-', '') : roomName
       });
       
-      // Try to find session by token or ID using a single query
-      // PostgREST .or() syntax: "field1.eq.value1,field2.eq.value2"
-      console.log("🔍 [twilio-video-token] Querying session by token or ID:", {
-        sessionToken,
-        sessionId
-      });
+      // Try to find session by token first, then by ID if sessionId is a valid UUID
+      let session = null;
+      let sessionError = null;
       
-      const { data: session, error: sessionError } = await supabase
+      console.log("🔍 [twilio-video-token] Querying session by token:", sessionToken);
+      const { data: sessionByToken, error: errorByToken } = await supabase
         .from('instant_sessions')
         .select('therapist_id')
-        .or(`session_token.eq.${sessionToken},id.eq.${sessionId}`)
+        .eq('session_token', sessionToken)
         .maybeSingle();
+      
+      if (errorByToken) {
+        sessionError = errorByToken;
+        console.error("❌ [twilio-video-token] Error querying by token:", errorByToken);
+      } else if (sessionByToken) {
+        session = sessionByToken;
+        console.log("✅ [twilio-video-token] Found session by token:", sessionToken);
+      } else if (sessionId) {
+        // Token not found, try by ID if sessionId is a valid UUID
+        console.log("🔄 [twilio-video-token] Token not found, trying by ID:", sessionId);
+        const { data: sessionById, error: errorById } = await supabase
+          .from('instant_sessions')
+          .select('therapist_id')
+          .eq('id', sessionId)
+          .maybeSingle();
+        
+        if (errorById) {
+          sessionError = errorById;
+          console.error("❌ [twilio-video-token] Error querying by ID:", errorById);
+        } else if (sessionById) {
+          session = sessionById;
+          console.log("✅ [twilio-video-token] Found session by ID:", sessionId);
+        } else {
+          console.error("❌ [twilio-video-token] Session not found by token or ID");
+        }
+      } else {
+        console.error("❌ [twilio-video-token] Session not found by token");
+      }
       
       console.log("📊 [twilio-video-token] Query result:", {
         found: !!session,
         error: sessionError,
         data: session,
         searchedToken: sessionToken,
-        searchedId: sessionId
+        searchedId: sessionId || 'N/A'
       });
 
       if (sessionError || !session) {
