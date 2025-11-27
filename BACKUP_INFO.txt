@@ -1,0 +1,88 @@
+================================================================================
+MINDBLOOM PROJECT BACKUP INFORMATION
+================================================================================
+
+Backup Date: $(date)
+Original Location: /Users/rsmacair/Samdekian Dropbox/Samdekian Docs/Mac (2)/Documents/Dev/MindBloom/mind-bloom-therapy-ai
+
+================================================================================
+BACKUP FILES CREATED
+================================================================================
+
+1. LIGHTWEIGHT BACKUP (3.1 MB)
+   File: mind-bloom-therapy-ai-backup-20251027-160929.tar.gz
+   
+   Excludes:
+   - node_modules/
+   - .git/
+   - dist/
+   - .cursor/
+   - supabase/.temp/
+   
+   Use Case: Quick backup of source code and configuration
+   Restore Time: Fast
+   
+2. FULL BACKUP (97 MB)
+   File: mind-bloom-therapy-ai-FULL-backup-20251027-160939.tar.gz
+   
+   Includes: EVERYTHING
+   - All source code
+   - node_modules (dependencies)
+   - .git (complete git history)
+   - All configuration files
+   
+   Use Case: Complete restoration with all dependencies and history
+   Restore Time: Slower but complete
+
+================================================================================
+HOW TO RESTORE FROM BACKUP
+================================================================================
+
+OPTION 1: Restore Lightweight Backup
+-------------------------------------
+tar -xzf mind-bloom-therapy-ai-backup-20251027-160929.tar.gz
+cd mind-bloom-therapy-ai
+npm install  # Reinstall dependencies
+
+OPTION 2: Restore Full Backup
+------------------------------
+tar -xzf mind-bloom-therapy-ai-FULL-backup-20251027-160939.tar.gz
+cd mind-bloom-therapy-ai
+# Everything is already included, ready to use!
+
+================================================================================
+VERIFICATION
+================================================================================
+
+To verify backup integrity:
+tar -tzf mind-bloom-therapy-ai-backup-20251027-160929.tar.gz | head -20
+tar -tzf mind-bloom-therapy-ai-FULL-backup-20251027-160939.tar.gz | head -20
+
+================================================================================
+STORAGE RECOMMENDATIONS
+================================================================================
+
+1. Keep backups in multiple locations:
+   ✓ Local drive (current location)
+   ✓ External drive
+   ✓ Cloud storage (Dropbox, Google Drive, etc.)
+
+2. Backup retention:
+   - Keep this pre-fork backup for at least 6 months
+   - Create new backups before major changes
+
+3. Security:
+   - These backups contain source code but no secrets
+   - Environment variables are documented in env.example
+   - Actual credentials must be configured separately
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+- Original .git history exists in FULL backup only
+- After forking to GitHub, you'll have fresh git history
+- This backup preserves your original state before the fork
+- Both backups created on: $(date)
+
+================================================================================
