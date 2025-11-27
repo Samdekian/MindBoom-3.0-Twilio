@@ -215,9 +215,46 @@ export function useTwilioVideoDisplay(
     }
 
     console.log('🎥 [TwilioVideoDisplay] Setting up room listeners for:', room.sid);
+    console.log('🎥 [TwilioVideoDisplay] Local participant:', {
+      identity: room.localParticipant?.identity,
+      sid: room.localParticipant?.sid,
+      videoTracksSize: room.localParticipant?.videoTracks.size,
+      audioTracksSize: room.localParticipant?.audioTracks.size
+    });
 
     // Initial update
     updateTrackInfos();
+    
+    // Also listen for local track publication events
+    const handleLocalTrackPublished = (publication: any) => {
+      console.log('📹 [TwilioVideoDisplay] Local track published:', publication.trackName, {
+        kind: publication.kind,
+        isTrackEnabled: publication.isTrackEnabled,
+        hasTrack: !!publication.track
+      });
+      updateTrackInfos();
+    };
+    
+    const handleLocalTrackUnpublished = (publication: any) => {
+      console.log('📹 [TwilioVideoDisplay] Local track unpublished:', publication.trackName);
+      updateTrackInfos();
+    };
+    
+    // Listen for local track publication events
+    const handleLocalTrackEnabled = () => {
+      console.log('📹 [TwilioVideoDisplay] Local track enabled');
+      updateTrackInfos();
+    };
+    
+    const handleLocalTrackDisabled = () => {
+      console.log('📹 [TwilioVideoDisplay] Local track disabled');
+      updateTrackInfos();
+    };
+    
+    room.localParticipant.on('trackPublished', handleLocalTrackPublished);
+    room.localParticipant.on('trackUnpublished', handleLocalTrackUnpublished);
+    room.localParticipant.on('trackEnabled', handleLocalTrackEnabled);
+    room.localParticipant.on('trackDisabled', handleLocalTrackDisabled);
 
     // Participant events
     const handleParticipantConnected = (participant: RemoteParticipant) => {
@@ -281,22 +318,6 @@ export function useTwilioVideoDisplay(
       participant.on('trackDisabled', handleTrackUpdate);
     });
 
-    // Local participant events
-    const handleLocalTrackPublished = () => {
-      console.log('📹 [TwilioVideoDisplay] Local track published');
-      handleLocalTrackUpdate();
-    };
-
-    const handleLocalTrackUnpublished = () => {
-      console.log('📹 [TwilioVideoDisplay] Local track unpublished');
-      handleLocalTrackUpdate();
-    };
-
-    room.localParticipant.on('trackPublished', handleLocalTrackPublished);
-    room.localParticipant.on('trackUnpublished', handleLocalTrackUnpublished);
-    room.localParticipant.on('trackEnabled', handleLocalTrackUpdate);
-    room.localParticipant.on('trackDisabled', handleLocalTrackUpdate);
-
     // Cleanup
     return () => {
       console.log('🧹 [TwilioVideoDisplay] Cleaning up room listeners');
@@ -316,8 +337,8 @@ export function useTwilioVideoDisplay(
 
       room.localParticipant.off('trackPublished', handleLocalTrackPublished);
       room.localParticipant.off('trackUnpublished', handleLocalTrackUnpublished);
-      room.localParticipant.off('trackEnabled', handleLocalTrackUpdate);
-      room.localParticipant.off('trackDisabled', handleLocalTrackUpdate);
+      room.localParticipant.off('trackEnabled', handleLocalTrackEnabled);
+      room.localParticipant.off('trackDisabled', handleLocalTrackDisabled);
 
       // Detach all tracks
       attachedElementsRef.current.forEach((element, trackSid) => {
