@@ -215,7 +215,7 @@ serve(async (req) => {
       console.log("🔍 [twilio-video-token] Querying session by token:", sessionToken);
       const { data: sessionByToken, error: errorByToken } = await supabase
         .from('instant_sessions')
-        .select('therapist_id')
+        .select('id, therapist_id')
         .eq('session_token', sessionToken)
         .maybeSingle();
       
@@ -230,7 +230,7 @@ serve(async (req) => {
         console.log("🔄 [twilio-video-token] Token not found, trying by ID:", sessionId);
         const { data: sessionById, error: errorById } = await supabase
           .from('instant_sessions')
-          .select('therapist_id')
+          .select('id, therapist_id')
           .eq('id', sessionId)
           .maybeSingle();
         
@@ -273,11 +273,44 @@ serve(async (req) => {
         );
       }
 
-      // Only therapist can generate tokens for main sessions
+      // Check if user is the therapist (host)
       const isTherapist = session.therapist_id === user.id;
+      
+      // Check if user is an active participant in this session
+      const { data: participantData, error: participantError } = await supabase
+        .from('instant_session_participants')
+        .select('id')
+        .eq('session_id', session.id || sessionId)
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (participantError) {
+        console.error("❌ [twilio-video-token] Error checking participant:", {
+          error: participantError,
+          userId: user.id,
+          sessionId: session.id || sessionId
+        });
+      }
+      
+      const isParticipant = !!participantData;
+      const isAuthorized = isTherapist || isParticipant;
 
-      if (!isTherapist) {
-        console.error("❌ [twilio-video-token] User not authorized for session");
+      console.log("🔐 [twilio-video-token] Authorization check:", {
+        userId: user.id,
+        isTherapist,
+        isParticipant,
+        isAuthorized,
+        therapistId: session.therapist_id
+      });
+
+      if (!isAuthorized) {
+        console.error("❌ [twilio-video-token] User not authorized for session:", {
+          userId: user.id,
+          isTherapist,
+          isParticipant,
+          therapistId: session.therapist_id
+        });
         return new Response(
           JSON.stringify({ error: 'Not authorized to join this session' }),
           { 
