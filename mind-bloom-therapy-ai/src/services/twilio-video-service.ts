@@ -205,20 +205,37 @@ export class TwilioVideoService {
       
       if (!user) throw new Error('Not authenticated');
 
-      // Check if participant already exists
-      const { data: existing } = await supabase
+      // Check if participant already exists (use maybeSingle to avoid error when not found)
+      const { data: existing, error: existingError } = await supabase
         .from('instant_session_participants')
         .select('id')
         .eq('session_id', sessionId)
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
+
+      if (existingError) {
+        console.error('❌ [TwilioVideoService] Error checking existing participant:', {
+          error: existingError,
+          code: existingError.code,
+          message: existingError.message,
+          sessionId,
+          userId: user.id
+        });
+      }
 
       if (existing) {
+        console.log('✅ [TwilioVideoService] Found existing participant:', existing.id);
         return existing.id;
       }
 
       // Create new participant
+      console.log('🔄 [TwilioVideoService] Creating new participant:', {
+        sessionId,
+        userId: user.id,
+        participantName
+      });
+      
       const { data: participant, error } = await supabase
         .from('instant_session_participants')
         .insert({
@@ -230,9 +247,26 @@ export class TwilioVideoService {
         .select('id')
         .single();
 
-      if (error || !participant) {
-        throw new Error('Failed to create participant');
+      if (error) {
+        console.error('❌ [TwilioVideoService] Database error creating participant:', {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          sessionId,
+          userId: user.id,
+          participantName
+        });
+        throw new Error(`Failed to create participant: ${error.message || error.code || 'Unknown error'}`);
       }
+
+      if (!participant) {
+        console.error('❌ [TwilioVideoService] No participant returned after insert');
+        throw new Error('Failed to create participant: No data returned');
+      }
+      
+      console.log('✅ [TwilioVideoService] Created new participant:', participant.id);
 
       return participant.id;
 
