@@ -102,9 +102,16 @@ export class PerformanceMonitor {
         timestamp: new Date().toISOString(),
       }));
 
-      await supabase.from('performance_metrics').insert(aggregatedMetrics);
-    } catch (error) {
-      console.error('Failed to flush performance metrics:', error);
+      const { error } = await supabase.from('performance_metrics').insert(aggregatedMetrics);
+      // Silently ignore table not found errors - monitoring is optional
+      if (error && !error.message?.includes('404') && !error.message?.includes('relation')) {
+        console.warn('Performance metrics flush warning:', error.message);
+      }
+    } catch (error: any) {
+      // Silently ignore network/table errors - monitoring shouldn't spam console
+      if (error?.message && !error.message.includes('ERR_CONNECTION') && !error.message.includes('404')) {
+        console.warn('Performance metrics flush warning:', error.message);
+      }
       // Don't throw - monitoring shouldn't break the app
     }
   }

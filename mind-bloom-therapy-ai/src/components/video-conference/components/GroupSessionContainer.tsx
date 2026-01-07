@@ -3,7 +3,7 @@
  * Uses Twilio Video for all sessions (main + breakout)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -70,6 +70,15 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
   // Track breakout Twilio room
   const [breakoutRoom, setBreakoutRoom] = useState<Room | null>(null);
 
+  // Memoize callbacks to prevent re-renders
+  const handleBreakoutAssignment = useCallback((assignment: any) => {
+    console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
+  }, []);
+
+  const handleDisconnectFromMainSession = useCallback(async () => {
+    console.log('🔌 [GroupSessionContainer] Switching to breakout room');
+  }, []);
+
   // Listen for breakout room assignments
   const {
     isInBreakoutRoom: assignmentInBreakoutRoom,
@@ -80,12 +89,8 @@ const GroupSessionContainer: React.FC<GroupSessionContainerProps> = ({
   } = useBreakoutAssignmentListener({
     enabled: true,
     sessionId,
-    onAssigned: (assignment) => {
-      console.log('📢 [GroupSessionContainer] Received breakout assignment:', assignment);
-    },
-    disconnectFromMainSession: async () => {
-      console.log('🔌 [GroupSessionContainer] Switching to breakout room');
-    }
+    onAssigned: handleBreakoutAssignment,
+    disconnectFromMainSession: handleDisconnectFromMainSession
   });
 
   // Update breakout room when therapist switches rooms

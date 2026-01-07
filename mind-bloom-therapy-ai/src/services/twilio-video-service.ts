@@ -112,14 +112,22 @@ export class TwilioVideoService {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      await supabase.from('session_analytics_events').insert({
+      const { error } = await supabase.from('session_analytics_events').insert({
         session_id: sessionId,
         event_type: eventType,
         user_id: user?.id,
         metadata: metadata || {}
       });
-    } catch (error) {
-      console.error('❌ [TwilioVideoService] Failed to log event:', error);
+      
+      // Silently ignore 404 (table not found) errors - analytics table may not exist
+      if (error && error.code !== '42P01' && !error.message?.includes('404')) {
+        console.warn('⚠️ [TwilioVideoService] Event log warning:', error.message);
+      }
+    } catch (error: any) {
+      // Silently ignore table not found/404 errors
+      if (error?.message && !error.message.includes('404') && !error.message.includes('42P01')) {
+        console.warn('⚠️ [TwilioVideoService] Event log warning:', error.message);
+      }
       // Don't throw - logging failures shouldn't break the app
     }
   }

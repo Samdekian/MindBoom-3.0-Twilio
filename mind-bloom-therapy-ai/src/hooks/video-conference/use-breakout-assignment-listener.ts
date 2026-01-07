@@ -39,6 +39,12 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 // Base backoff delay after error (doubles each time)
 const BASE_ERROR_BACKOFF_MS = 10000;
 
+// Module-level singleton to prevent multiple subscriptions across re-renders
+// This persists even when the hook unmounts/remounts
+let globalSubscriptionActive = false;
+let globalLastSetupTime = 0;
+const MIN_SETUP_INTERVAL_MS = 2000; // Minimum 2 seconds between setups
+
 export function useBreakoutAssignmentListener(
   options: UseBreakoutAssignmentListenerOptions = {}
 ): UseBreakoutAssignmentListenerReturn {
@@ -59,12 +65,30 @@ export function useBreakoutAssignmentListener(
   const lastCheckedAssignmentRef = useRef<string | null>(null);
   const failedAssignmentsRef = useRef<Set<string>>(new Set()); // Track failed assignments
   const consecutiveErrorsRef = useRef(0);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const slowPollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Slow polling interval ID
   const fastPollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Fast polling for first 30 seconds
   const userIdRef = useRef<string | null>(null);
   const cleanupStartedRef = useRef(false);
   const isJoiningRef = useRef(false); // Prevent concurrent join attempts
   const setupTimeRef = useRef<number>(0); // Track when setup started for fast polling
+  const isInBreakoutRoomRef = useRef(false); // Track breakout room state via ref
+  const currentRoomIdRef = useRef<string | null>(null); // Track current room ID via ref
+  const disconnectFromMainSessionRef = useRef(disconnectFromMainSession); // Store callback in ref
+  const onAssignedRef = useRef(onAssigned); // Store callback in ref
+  const joinBreakoutRoomRef = useRef<((assignment: BreakoutAssignmentPayload) => Promise<void>) | null>(null); // Store join callback
+  const leaveBreakoutRoomRef = useRef<(() => Promise<void>) | null>(null); // Store leave callback
+  const mainSetupCompleteRef = useRef(false); // Track if main setup is complete
+  const dbSetupCompleteRef = useRef(false); // Track if DB setup is complete
+  const sessionIdRef = useRef(sessionId); // Store session ID in ref to track changes
+  const pollingIntervalValueRef = useRef(pollingInterval); // Store polling interval value in ref
+  
+  // Update refs when callbacks change (but don't trigger re-renders)
+  useEffect(() => {
+    disconnectFromMainSessionRef.current = disconnectFromMainSession;
+    onAssignedRef.current = onAssigned;
+    joinBreakoutRoomRef.current = joinBreakoutRoom;
+    leaveBreakoutRoomRef.current = leaveBreakoutRoom;
+  }, [disconnectFromMainSession, onAssigned, joinBreakoutRoom, leaveBreakoutRoom]);
 
   /**
    * Join a breakout room
@@ -89,9 +113,10 @@ export function useBreakoutAssignmentListener(
 
     try {
       // Disconnect from main WebRTC session first
-      if (disconnectFromMainSession) {
+      const disconnectFn = disconnectFromMainSessionRef.current;
+      if (disconnectFn) {
         console.log('🔌 [BreakoutAssignmentListener] Disconnecting from main session...');
-        await disconnectFromMainSession();
+        await disconnectFn();
         console.log('✅ [BreakoutAssignmentListener] Disconnected from main session');
       }
 
@@ -132,6 +157,10 @@ export function useBreakoutAssignmentListener(
       setCurrentRoomId(assignment.room_id);
       setCurrentRoomName(assignment.room_name);
       setIsInBreakoutRoom(true);
+      
+      // Update refs for stable access in callbacks
+      isInBreakoutRoomRef.current = true;
+      currentRoomIdRef.current = assignment.room_id;
 
       toast({
         title: `Joined ${assignment.room_name}`,
@@ -139,8 +168,9 @@ export function useBreakoutAssignmentListener(
       });
 
       // Notify callback
-      if (onAssigned) {
-        onAssigned(assignment);
+      const onAssignedFn = onAssignedRef.current;
+      if (onAssignedFn) {
+        onAssignedFn(assignment);
       }
 
     } catch (error: any) {
@@ -163,15 +193,15 @@ export function useBreakoutAssignmentListener(
       // Stop polling if too many consecutive errors
       if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
         console.warn('⚠️ [BreakoutAssignmentListener] Too many errors, stopping polling');
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
+        if (slowPollingIntervalRef.current) {
+          clearInterval(slowPollingIntervalRef.current);
+          slowPollingIntervalRef.current = null;
         }
       }
     } finally {
       isJoiningRef.current = false;
     }
-  }, [disconnectFromMainSession, onAssigned, toast]);
+    }, [toast]); // Removed disconnectFromMainSession and onAssigned - using refs instead
 
   /**
    * Leave breakout room and return to main session
@@ -184,14 +214,19 @@ export function useBreakoutAssignmentListener(
       roomManager.disconnect();
 
       // Clear the current room from failed list so it can be rejoined
-      if (currentRoomId) {
-        failedAssignmentsRef.current.delete(currentRoomId);
+      const currentRoom = currentRoomIdRef.current;
+      if (currentRoom) {
+        failedAssignmentsRef.current.delete(currentRoom);
       }
 
       setCurrentBreakoutRoom(null);
       setCurrentRoomId(null);
       setCurrentRoomName(null);
       setIsInBreakoutRoom(false);
+      
+      // Update refs
+      isInBreakoutRoomRef.current = false;
+      currentRoomIdRef.current = null;
       lastCheckedAssignmentRef.current = null;
       consecutiveErrorsRef.current = 0; // Reset error counter
 
@@ -202,7 +237,7 @@ export function useBreakoutAssignmentListener(
     } catch (error: any) {
       console.error('❌ [BreakoutAssignmentListener] Error leaving breakout room:', error);
     }
-  }, [currentRoomId, toast]);
+    }, [toast]); // Removed currentRoomId - using ref instead
 
   /**
    * Poll database for assignment changes (fallback for broadcast)
@@ -219,12 +254,28 @@ export function useBreakoutAssignmentListener(
     }
 
     try {
-      // Get current user's participant record (don't filter by is_active - may be in breakout)
-      const { data: participant } = await supabase
+      // Get current user's participant record for this session (don't filter by is_active - may be in breakout)
+      // Filter by session_id to avoid RLS issues and ensure we get the correct participant
+      if (!sessionId) {
+        console.warn('⚠️ [BreakoutAssignmentListener] No sessionId available for participant lookup');
+        return;
+      }
+      
+      const { data: participant, error: participantError } = await supabase
         .from('instant_session_participants')
         .select('id')
+        .eq('session_id', sessionId)
         .eq('user_id', userIdRef.current)
         .maybeSingle();
+
+      // Silently handle RLS/permission errors
+      if (participantError) {
+        // 406 errors are usually RLS-related, don't spam console
+        if (participantError.code !== '406' && !participantError.message?.includes('406')) {
+          console.warn('⚠️ [BreakoutAssignmentListener] Participant lookup warning:', participantError.message);
+        }
+        return;
+      }
 
       if (!participant) return;
 
@@ -256,37 +307,49 @@ export function useBreakoutAssignmentListener(
       // Check if there's an assignment we haven't processed
       const breakoutRoom = (assignment as any)?.breakout_rooms;
       
+      // Use refs for stable state access
+      const currentlyInBreakoutRoom = isInBreakoutRoomRef.current;
+      const currentRoom = currentRoomIdRef.current;
+      
       if (assignment && breakoutRoom?.is_active && breakoutRoom?.twilio_room_sid) {
         const assignmentKey = breakoutRoom.id;
         
         // Skip if already processed, already failed, or already in this room
         if (lastCheckedAssignmentRef.current === assignmentKey) return;
         if (failedAssignmentsRef.current.has(assignmentKey)) return;
-        if (isInBreakoutRoom && currentRoomId === assignmentKey) return;
+        if (currentlyInBreakoutRoom && currentRoom === assignmentKey) return;
         
         // Only process if not currently in a breakout room
-        if (!isInBreakoutRoom) {
+        if (!currentlyInBreakoutRoom) {
           console.log('📡 [BreakoutAssignmentListener] Found assignment via polling:', breakoutRoom);
           
           lastCheckedAssignmentRef.current = assignmentKey;
           
-          await joinBreakoutRoom({
-            room_id: breakoutRoom.id,
-            room_name: breakoutRoom.room_name,
-            twilio_room_sid: breakoutRoom.twilio_room_sid,
-            action: 'join'
-          });
+          // Use ref to access latest callback
+          const joinFn = joinBreakoutRoomRef.current;
+          if (joinFn) {
+            await joinFn({
+              room_id: breakoutRoom.id,
+              room_name: breakoutRoom.room_name,
+              twilio_room_sid: breakoutRoom.twilio_room_sid,
+              action: 'join'
+            });
+          }
         }
-      } else if (!assignment && isInBreakoutRoom) {
+      } else if (!assignment && currentlyInBreakoutRoom) {
         // No assignment but we're in a room - we were removed
         console.log('📡 [BreakoutAssignmentListener] Assignment removed, leaving room');
-        await leaveBreakoutRoom();
+        // Use ref to access latest callback
+        const leaveFn = leaveBreakoutRoomRef.current;
+        if (leaveFn) {
+          await leaveFn();
+        }
       }
     } catch (error) {
       console.error('❌ [BreakoutAssignmentListener] Poll check failed:', error);
       consecutiveErrorsRef.current += 1;
     }
-  }, [isInBreakoutRoom, currentRoomId, joinBreakoutRoom, leaveBreakoutRoom]);
+    }, []); // No dependencies - using refs for all callbacks
 
   /**
    * Setup broadcast listener and polling
@@ -297,6 +360,23 @@ export function useBreakoutAssignmentListener(
       return;
     }
 
+    // Global debounce - prevent rapid setup/cleanup cycles
+    const now = Date.now();
+    if (globalSubscriptionActive || (now - globalLastSetupTime < MIN_SETUP_INTERVAL_MS)) {
+      console.log('⏸️ [BreakoutAssignmentListener] Debounced - subscription active or too soon since last setup');
+      return;
+    }
+
+    // Prevent multiple concurrent setups
+    if (mainSetupCompleteRef.current) {
+      console.log('⏸️ [BreakoutAssignmentListener] Main setup already complete, skipping');
+      return;
+    }
+
+    // Mark subscription as active globally
+    globalSubscriptionActive = true;
+    globalLastSetupTime = now;
+
     let channel: ReturnType<typeof supabase.channel> | null = null;
     cleanupStartedRef.current = false;
 
@@ -305,6 +385,14 @@ export function useBreakoutAssignmentListener(
       
       if (!user?.id) {
         console.warn('⚠️ [BreakoutAssignmentListener] No authenticated user');
+        globalSubscriptionActive = false;
+        return;
+      }
+
+      // Double-check setup hasn't already completed (async race condition)
+      if (mainSetupCompleteRef.current || cleanupStartedRef.current) {
+        console.log('⏸️ [BreakoutAssignmentListener] Setup cancelled (already complete or cleanup started)');
+        globalSubscriptionActive = false;
         return;
       }
 
@@ -325,9 +413,15 @@ export function useBreakoutAssignmentListener(
           const assignment: BreakoutAssignmentPayload = payload.payload;
           
           if (assignment.action === 'join') {
-            await joinBreakoutRoom(assignment);
+            const joinFn = joinBreakoutRoomRef.current;
+            if (joinFn) {
+              await joinFn(assignment);
+            }
           } else if (assignment.action === 'return') {
-            await leaveBreakoutRoom();
+            const leaveFn = leaveBreakoutRoomRef.current;
+            if (leaveFn) {
+              await leaveFn();
+            }
           }
         })
         .subscribe(async (status) => {
@@ -360,7 +454,11 @@ export function useBreakoutAssignmentListener(
       
       // Slow polling (normal interval - 30 seconds)
       console.log('⏱️ [BreakoutAssignmentListener] Starting slow polling fallback');
-      pollingIntervalRef.current = setInterval(checkForAssignment, pollingInterval);
+      const currentPollingInterval = pollingIntervalValueRef.current;
+      slowPollingIntervalRef.current = setInterval(checkForAssignment, currentPollingInterval);
+      
+      // Mark setup as complete
+      mainSetupCompleteRef.current = true;
       
       // Initial check
       await checkForAssignment();
@@ -384,35 +482,68 @@ export function useBreakoutAssignmentListener(
         fastPollingIntervalRef.current = null;
       }
 
-      if (pollingIntervalRef.current) {
+      if (slowPollingIntervalRef.current) {
         console.log('🧹 [BreakoutAssignmentListener] Stopping slow polling');
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
+        clearInterval(slowPollingIntervalRef.current);
+        slowPollingIntervalRef.current = null;
       }
 
       // Reset state refs on cleanup
       failedAssignmentsRef.current.clear();
       consecutiveErrorsRef.current = 0;
       isJoiningRef.current = false;
+      mainSetupCompleteRef.current = false; // Allow setup again after cleanup
+      globalSubscriptionActive = false; // Allow new subscription after cleanup
     };
-  }, [enabled, pollingInterval, joinBreakoutRoom, leaveBreakoutRoom, checkForAssignment]);
+  }, [enabled]); // Minimal dependencies - pollingInterval is stable, checkForAssignment uses refs
 
   // Subscribe to database changes for this user's assignments
   useEffect(() => {
     if (!enabled || !sessionId) return;
 
+    // Update session ID ref
+    sessionIdRef.current = sessionId;
+    
+    // Prevent multiple concurrent DB setups - use global check
+    if (dbSetupCompleteRef.current) {
+      console.log('⏸️ [BreakoutAssignmentListener] DB setup already complete, skipping');
+      return;
+    }
+
+    // Wait for main setup to complete before setting up DB listener
+    if (!mainSetupCompleteRef.current) {
+      console.log('⏸️ [BreakoutAssignmentListener] Waiting for main setup before DB listener');
+      return;
+    }
+
     const setupDbListener = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.id) return;
 
+      // Double-check setup hasn't already completed
+      if (dbSetupCompleteRef.current) {
+        console.log('⏸️ [BreakoutAssignmentListener] DB setup cancelled (already complete)');
+        return;
+      }
+
       // Get participant ID for this session
-      const { data: participant } = await supabase
+      const currentSessionId = sessionIdRef.current;
+      const { data: participant, error: participantError } = await supabase
         .from('instant_session_participants')
         .select('id')
-        .eq('session_id', sessionId)
+        .eq('session_id', currentSessionId)
         .eq('user_id', user.id)
         .eq('is_active', true)
         .maybeSingle();
+
+      // Silently handle RLS/permission errors - participant may not be active yet
+      if (participantError) {
+        // 406 errors are usually RLS-related, don't spam console
+        if (participantError.code !== '406' && !participantError.message?.includes('406')) {
+          console.warn('⚠️ [BreakoutAssignmentListener] Participant lookup warning:', participantError.message);
+        }
+        return;
+      }
 
       if (!participant) return;
 
@@ -438,6 +569,9 @@ export function useBreakoutAssignmentListener(
         )
         .subscribe();
 
+      // Mark DB setup as complete
+      dbSetupCompleteRef.current = true;
+
       return () => {
         supabase.removeChannel(dbChannel);
       };
@@ -446,8 +580,9 @@ export function useBreakoutAssignmentListener(
     const cleanup = setupDbListener();
     return () => {
       cleanup?.then(fn => fn?.());
+      dbSetupCompleteRef.current = false; // Allow setup again after cleanup
     };
-  }, [enabled, sessionId, checkForAssignment]);
+  }, [enabled, sessionId]); // Removed checkForAssignment - it's stable and we call it directly
 
   return {
     isInBreakoutRoom,
